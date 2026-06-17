@@ -1,6 +1,9 @@
 """
 Athar Shia Bot - Event Service
 بوت آثار الشيعة - خدمة المناسبات
+
+حساب المناسبات يعتمد على ترتيب يومي حقيقي داخل السنة الهجرية
+باستخدام أطوال الشهور الهجرية الفعلية.
 """
 
 import json
@@ -12,102 +15,156 @@ from hijri_converter import convert
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "normalized"
 
+# ── أطوال الشهور الهجرية الفعلية (30-29 بالتناوب، ذو الحجة 29) ──
+HIJRI_MONTH_LENGTHS = [30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29]
+TOTAL_HIJRI_YEAR_DAYS = sum(HIJRI_MONTH_LENGTHS)  # 354
+
+# الموقع الترتيبي لأول يوم من كل شهر داخل السنة (1-based)
+_MONTH_START_ORDINAL = []
+_pos = 1
+for _L in HIJRI_MONTH_LENGTHS:
+    _MONTH_START_ORDINAL.append(_pos)
+    _pos += _L
+
 
 def load_json(filepath: Path) -> Dict:
-    """Load JSON file."""
     if not filepath.exists():
         return {"items": []}
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         return {"items": []}
 
 
+# ─────────────────────────────────────────────
+# التاريخ الهجري
+# ─────────────────────────────────────────────
+
 def get_today_hijri() -> Dict[str, int]:
-    """Get today's Hijri date."""
     today = datetime.now()
-    hijri = convert.Gregorian(today.year, today.month, today.day).to_hijri()
+    h = convert.Gregorian(today.year, today.month, today.day).to_hijri()
     return {
-        "year": hijri.year,
-        "month": hijri.month,
-        "day": hijri.day,
-        "month_name": get_hijri_month_name(hijri.month)
+        "year":       h.year,
+        "month":      h.month,
+        "day":        h.day,
+        "month_name": get_hijri_month_name(h.month),
     }
 
 
 def get_hijri_month_name(month: int) -> str:
-    """Get Hijri month name in Arabic."""
     months = {
-        1: "محرم", 2: "صفر", 3: "ربيع الأول", 4: "ربيع الثاني",
-        5: "جمادى الأولى", 6: "جمادى الآخرة", 7: "رجب", 8: "شعبان",
-        9: "رمضان", 10: "شوال", 11: "ذو القعدة", 12: "ذو الحجة"
+        1: "محرم",   2: "صفر",       3: "ربيع الأول",  4: "ربيع الثاني",
+        5: "جمادى الأولى", 6: "جمادى الآخرة", 7: "رجب",  8: "شعبان",
+        9: "رمضان",  10: "شوال",     11: "ذو القعدة",   12: "ذو الحجة",
     }
     return months.get(month, "")
 
 
+# ─────────────────────────────────────────────
+# حساب الترتيب اليومي داخل السنة الهجرية
+# ─────────────────────────────────────────────
+
+def hijri_day_ordinal(month: int, day: int) -> int:
+    """
+    يحوّل (month, day) إلى رقم ترتيبي داخل السنة الهجرية.
+    مثال: (1,1)=1  (1,10)=10  (2,1)=31  (12,29)=354
+    """
+    if not (1 <= month <= 12):
+        return 0
+    return _MONTH_START_ORDINAL[month - 1] + (day - 1)
+
+
+def days_until_event(event_month: int, event_day: int,
+                     current_month: int, current_day: int) -> int:
+    """
+    يحسب عدد الأيام حتى المناسبة القادمة مع دعم الانتقال للسنة التالية.
+    """
+    ev_ord  = hijri_day_ordinal(event_month, event_day)
+    cur_ord = hijri_day_ordinal(current_month, current_day)
+    diff = ev_ord - cur_ord
+    if diff < 0:
+        diff += TOTAL_HIJRI_YEAR_DAYS
+    return diff
+
+
+# ─────────────────────────────────────────────
+# تحليل حقل hijri_date  (صيغة DD-MM)
+# ─────────────────────────────────────────────
+
 def _parse_hijri_date(item: Dict) -> tuple:
     """
-    Parse the hijri date from an event item.
-    Supports two formats:
-      - hijri_date: "DD-MM"  (migrated format: day-month)
-      - month + day as separate integer fields (old format)
-    Returns (month, day) as integers.
+    يُرجع (month, day) كأعداد صحيحة.
+    الصيغة المخزنة: "DD-MM"  (يوم-شهر)
     """
     hijri_date = item.get("hijri_date", "")
     if hijri_date and "-" in str(hijri_date):
         parts = str(hijri_date).split("-")
         try:
-            day = int(parts[0])
+            day   = int(parts[0])
             month = int(parts[1])
             return month, day
         except (ValueError, IndexError):
             pass
+    # fallback: حقول month/day منفصلة (صيغة قديمة)
     return item.get("month", 0), item.get("day", 0)
 
 
-def get_today_event() -> Optional[Dict[str, Any]]:
-    """Get today's event if any."""
-    hijri = get_today_hijri()
-    filepath = DATA_DIR / "event_content" / "events.json"
-    data = load_json(filepath)
+# ─────────────────────────────────────────────
+# واجهة البيانات
+# ─────────────────────────────────────────────
 
+def get_today_event() -> Optional[Dict[str, Any]]:
+    hijri = get_today_hijri()
+    data  = load_json(DATA_DIR / "event_content" / "events.json")
     for item in data.get("items", []):
-        month, day = _parse_hijri_date(item)
-        if month == hijri["month"] and day == hijri["day"]:
+        m, d = _parse_hijri_date(item)
+        if m == hijri["month"] and d == hijri["day"]:
             return item
     return None
 
 
 def get_upcoming_events(days: int = 30) -> List[Dict[str, Any]]:
-    """Get upcoming events within N days."""
+    """
+    يُرجع المناسبات خلال N يوماً القادمة.
+    يستخدم الترتيب اليومي الحقيقي مع دعم عبور نهاية السنة.
+    """
     hijri = get_today_hijri()
-    filepath = DATA_DIR / "event_content" / "events.json"
-    data = load_json(filepath)
+    data  = load_json(DATA_DIR / "event_content" / "events.json")
 
-    current_day = hijri["month"] * 30 + hijri["day"]
+    cur_m, cur_d = hijri["month"], hijri["day"]
     upcoming = []
 
     for item in data.get("items", []):
-        month, day = _parse_hijri_date(item)
-        item_day = month * 30 + day
-        diff = item_day - current_day
-        if 0 <= diff <= days:
-            item_copy = dict(item)
-            item_copy["days_until"] = diff
-            item_copy["_month"] = month
-            item_copy["_day"] = day
-            upcoming.append(item_copy)
+        ev_m, ev_d = _parse_hijri_date(item)
+        if not ev_m or not ev_d:
+            continue
+        diff = days_until_event(ev_m, ev_d, cur_m, cur_d)
+        if 0 < diff <= days:          # 0 = اليوم نفسه (يُعرض عبر get_today_event)
+            copy = dict(item)
+            copy["days_until"] = diff
+            copy["_month"]     = ev_m
+            copy["_day"]       = ev_d
+            upcoming.append(copy)
 
-    return sorted(upcoming, key=lambda x: x.get("days_until", 0))
+    return sorted(upcoming, key=lambda x: x["days_until"])
+
+
+def get_today_events_list() -> List[Dict[str, Any]]:
+    """يُرجع كل المناسبات اليوم (قد يكون أكثر من واحدة)."""
+    hijri = get_today_hijri()
+    data  = load_json(DATA_DIR / "event_content" / "events.json")
+    result = []
+    for item in data.get("items", []):
+        m, d = _parse_hijri_date(item)
+        if m == hijri["month"] and d == hijri["day"]:
+            result.append(item)
+    return result
 
 
 def get_weekly_dua() -> Optional[Dict[str, Any]]:
-    """Get dua for the current weekday."""
     weekday = datetime.now().strftime("%A").lower()
-    filepath = DATA_DIR / "event_content" / "weekly_duas.json"
-    data = load_json(filepath)
-
+    data    = load_json(DATA_DIR / "event_content" / "weekly_duas.json")
     for item in data.get("items", []):
         if item.get("weekday", "").lower() == weekday:
             return item
@@ -115,10 +172,7 @@ def get_weekly_dua() -> Optional[Dict[str, Any]]:
 
 
 def get_event_by_date(month: int, day: int) -> Optional[Dict[str, Any]]:
-    """Get event by specific Hijri date."""
-    filepath = DATA_DIR / "event_content" / "events.json"
-    data = load_json(filepath)
-
+    data = load_json(DATA_DIR / "event_content" / "events.json")
     for item in data.get("items", []):
         m, d = _parse_hijri_date(item)
         if m == month and d == day:
@@ -126,96 +180,80 @@ def get_event_by_date(month: int, day: int) -> Optional[Dict[str, Any]]:
     return None
 
 
+# ─────────────────────────────────────────────
+# تنسيق العرض
+# ─────────────────────────────────────────────
+
 def format_hijri_date(hijri: Dict) -> str:
-    """Format Hijri date for display."""
     return f"{hijri['day']} {hijri['month_name']} {hijri['year']} هـ"
 
 
 def format_event(event: Dict) -> str:
-    """Format event for display."""
-    title = event.get("title", "")
-    description = event.get("description", "")
-    amal = event.get("amal", "")
-    month, day = _parse_hijri_date(event)
-    is_happy = event.get("is_happy", False)
-    is_sad = event.get("is_sad", False)
+    text  = event.get("text", "")
+    month_name = event.get("month", "")
+    day   = event.get("day", "")
+    m, d  = _parse_hijri_date(event)
+    if not month_name:
+        month_name = get_hijri_month_name(m)
 
-    emoji = "🎉" if is_happy else "⚫" if is_sad else "📌"
-
-    result = f"{emoji} <b>{title}</b>\n"
-    result += f"📅 {day} {get_hijri_month_name(month)}\n\n"
-
-    if description:
-        result += f"{description}\n\n"
-
-    if amal:
-        result += f"✨ <b>الأعمال المستحبة:</b>\n{amal}"
-
+    result  = f"📅 <b>{d} {month_name}</b>\n\n"
+    result += text[:3800]
+    if len(text) > 3800:
+        result += "\n\n<i>... (يتبع)</i>"
     return result
 
 
 def format_upcoming_events(events: List[Dict]) -> str:
-    """Format upcoming events list."""
     result = "📅 <b>المناسبات القادمة</b>\n\n"
-
     if not events:
-        result += "لا توجد مناسبات قادمة."
+        result += "لا توجد مناسبات في الأيام القادمة."
         return result
 
     for event in events:
-        days = event.get("days_until", 0)
-        title = event.get("title", "")
-        month = event.get("_month", 0)
-        day = event.get("_day", 0)
+        days   = event.get("days_until", 0)
+        month  = event.get("_month", 0)
+        day    = event.get("_day", 0)
+        month_name = get_hijri_month_name(month)
+        text_preview = event.get("text", "")
+        # أول سطر من النص كعنوان مختصر
+        first_line = text_preview.split("\n")[0].lstrip("* ").strip()
+        title = first_line[:60] + "…" if len(first_line) > 60 else first_line
 
-        if days == 0:
-            result += f"• 📌 <b>{title}</b> - اليوم!\n"
-        else:
-            result += f"• {title} - بعد {days} يوم ({day} {get_hijri_month_name(month)})\n"
+        result += f"• <b>{day} {month_name}</b> — بعد {days} يوم\n"
+        result += f"  <i>{title}</i>\n\n"
 
-    return result
+    return result.rstrip()
 
 
 def format_weekly_dua(dua: Dict) -> str:
-    """Format weekly dua for display."""
-    title = dua.get("title", "")
-    text = dua.get("text", "")
-    file_id = dua.get("file_id", "")
-
-    result = f"🤲 <b>{title}</b>\n\n"
+    title   = dua.get("title", "")
+    text    = dua.get("text", "")
+    result  = f"🤲 <b>{title}</b>\n\n"
     if text:
         result += f"{text}\n\n"
-    if file_id:
-        result += "📎 يمكنك تحميل الملف الكامل من المكتبة."
-
     return result
 
 
 def get_hijri_calendar(year: Optional[int] = None) -> str:
-    """Get Hijri calendar overview."""
     hijri = get_today_hijri()
     if year is None:
         year = hijri["year"]
-
     result = f"🗓 <b>التقويم الهجري {year} هـ</b>\n\n"
-
-    months_data = {
-        1: ("محرم", "📌"),
-        2: ("صفر", "📌"),
-        3: ("ربيع الأول", "🎉"),
-        4: ("ربيع الثاني", "🎉"),
-        5: ("جمادى الأولى", "📌"),
-        6: ("جمادى الآخرة", "📌"),
-        7: ("رجب", "🌟"),
-        8: ("شعبان", "🌟"),
-        9: ("رمضان", "🌙"),
-        10: ("شوال", "🎉"),
-        11: ("ذو القعدة", "📌"),
-        12: ("ذو الحجة", "🕋"),
-    }
-
-    for m, (name, emoji) in months_data.items():
+    months_info = [
+        (1,  "محرم",            "📌"),
+        (2,  "صفر",             "📌"),
+        (3,  "ربيع الأول",      "🎉"),
+        (4,  "ربيع الثاني",     "🎉"),
+        (5,  "جمادى الأولى",    "📌"),
+        (6,  "جمادى الآخرة",    "📌"),
+        (7,  "رجب",             "🌟"),
+        (8,  "شعبان",           "🌟"),
+        (9,  "رمضان",           "🌙"),
+        (10, "شوال",            "🎉"),
+        (11, "ذو القعدة",       "📌"),
+        (12, "ذو الحجة",        "🕋"),
+    ]
+    for m, name, emoji in months_info:
         result += f"{emoji} {m}. {name}\n"
-
     result += f"\n📅 اليوم: {format_hijri_date(hijri)}"
     return result

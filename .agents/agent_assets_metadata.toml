@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ooohsvwGZy7RT5fbeBLsf"
+uri = "file://ATHAR_BOT_REPORT.md"
+type = "text"
+title = "تقرير بوت آثار الشيعة — شرح كامل للمشروع"
