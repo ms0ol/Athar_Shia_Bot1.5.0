@@ -6,7 +6,8 @@ channel = "stable-25_05"
 expertMode = true
 
 [deployment]
-deploymentTarget = "cloudrun"
+deploymentTarget = "vm"
+run = ["python", "app.py"]
 
 [workflows]
 runButton = "Project"

@@ -1,6 +1,6 @@
 """
 Athar Shia Bot - Prayer Service
-بوت آثار الشيعة - خدمة الصلاة والأذان
+بوت أثَر الشيعة - خدمة الصلاة والأذان
 """
 
 import math
@@ -102,23 +102,21 @@ class PrayerCalculator:
         return decl, eqt
 
     def _compute_time(self, angle: float, decl: float, eqt: float, is_night: bool = False) -> float:
-        """Compute prayer time for a given sun angle."""
+        """Compute prayer time for a given sun horizon altitude angle (degrees)."""
         lat_rad = math.radians(self.lat)
         decl_rad = math.radians(decl)
-        angle_rad = math.radians(angle)
 
-        # Hour angle
-        cos_h = (math.cos(angle_rad) - math.sin(lat_rad) * math.sin(decl_rad)) / \
+        # Standard Islamic prayer formula: cos_H = (sin(a) - sin(φ)·sin(δ)) / (cos(φ)·cos(δ))
+        cos_h = (math.sin(math.radians(angle)) - math.sin(lat_rad) * math.sin(decl_rad)) / \
                 (math.cos(lat_rad) * math.cos(decl_rad))
 
-        # Clamp value
         cos_h = max(-1.0, min(1.0, cos_h))
-
         h = math.degrees(math.acos(cos_h))
+
+        # is_night=True → event is before noon (subtract hour angle)
         if is_night:
             h = -h
 
-        # Time in UTC hours
         t = 12.0 + (h / 15.0) - (eqt / 60.0) - (self.lng / 15.0) + self.timezone_offset
         return t
 
@@ -127,40 +125,45 @@ class PrayerCalculator:
         jd = self._jday(date)
         decl, eqt = self._sun_position(jd)
 
-        # Jafari/Shia method parameters
+        # Jafari/Shia method (مذهب الإمامية الاثني عشرية)
         times = {}
 
-        # Fajr: angle -16° (some use -18°)
+        # Fajr: true dawn angle -16° (Ja'fari/Iraq standard)
         fajr_time = self._compute_time(-16.0, decl, eqt, is_night=True)
         times["fajr"] = self._format_time(fajr_time)
 
-        # Sunrise: angle -0.833°
+        # Sunrise: solar altitude -0.833° (standard refraction)
         sunrise_time = self._compute_time(-0.833, decl, eqt, is_night=True)
         times["sunrise"] = self._format_time(sunrise_time)
 
-        # Dhuhr: sun at zenith
+        # Dhuhr: true noon (sun crosses meridian)
         dhuhr_time = 12.0 - (eqt / 60.0) - (self.lng / 15.0) + self.timezone_offset
         times["dhuhr"] = self._format_time(dhuhr_time)
 
-        # Asr: shadow factor 1 (first asr) or 2 (second asr - Shia)
-        # For Shia: asr = shadow length = object height + its shadow at noon
+        # Asr: Ja'fari/Shia = shadow length equals 2× object height (مذهب الحنفي الثاني)
         lat_rad = math.radians(self.lat)
         decl_rad = math.radians(decl)
-        asr_angle = math.degrees(math.atan(1.0 / (math.tan(lat_rad - decl_rad) + 1.0)))
+        noon_alt = 90.0 - abs(self.lat - decl)
+        asr_angle = math.degrees(math.atan(1.0 / (2.0 + 1.0 / math.tan(math.radians(noon_alt)))))
         asr_time = self._compute_time(asr_angle, decl, eqt, is_night=False)
         times["asr"] = self._format_time(asr_time)
 
-        # Maghrib/Sunset: angle -0.833°
-        maghrib_time = self._compute_time(-0.833, decl, eqt, is_night=False)
+        # Sunset (for reference)
+        sunset_time = self._compute_time(-0.833, decl, eqt, is_night=False)
+        times["sunset"] = self._format_time(sunset_time)
+
+        # Maghrib (Ja'fari): disappearance of redness from eastern sky ≈ sunset + ~17min
+        # Modeled as solar altitude -4° after sunset
+        maghrib_time = self._compute_time(-4.0, decl, eqt, is_night=False)
         times["maghrib"] = self._format_time(maghrib_time)
 
-        # Isha: angle -14° (Shia) or -18°
+        # Isha: disappearance of evening twilight glow, angle -14° (Ja'fari standard)
         isha_time = self._compute_time(-14.0, decl, eqt, is_night=False)
         times["isha"] = self._format_time(isha_time)
 
-        # Midnight (Shia: halfway between maghrib and fajr of next day)
-        # Simplified: use solar midnight
-        midnight_time = 24.0 - (self.lng / 15.0) + self.timezone_offset
+        # Midnight (Shia): halfway between Maghrib and next day's Fajr
+        fajr_next = fajr_time + 24.0
+        midnight_time = (maghrib_time + fajr_next) / 2.0
         times["midnight"] = self._format_time(midnight_time % 24)
 
         return times
