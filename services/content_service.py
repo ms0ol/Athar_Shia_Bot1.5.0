@@ -12,6 +12,26 @@ import database as db
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "normalized"
 
+# ─── Content Type → File Path Routing ───
+# Maps content_type → (subfolder, filename)
+_CONTENT_ROUTES = {
+    "hadith":           ("daily_content", "hadith"),
+    "wisdom":           ("daily_content", "wisdom"),
+    "wisdom_short":     ("daily_content", "wisdom"),
+    "wisdom_featured":  ("daily_content", "wisdom"),
+    "wisdom_deep":      ("daily_content", "wisdom"),
+    "daily_dua":        ("daily_content", "daily_dua"),
+    "munajat":          ("library",       "munajat"),
+    "ziyarat":          ("library",       "ziyarat"),
+}
+
+# Wisdom type filter mapping
+_WISDOM_TYPE_FILTER = {
+    "wisdom_short":    "short",
+    "wisdom_featured": "featured",
+    "wisdom_deep":     "deep",
+}
+
 
 def load_json(filepath: Path) -> Dict:
     """Load and return JSON file contents."""
@@ -24,28 +44,43 @@ def load_json(filepath: Path) -> Dict:
         return {"items": []}
 
 
+def _resolve_path(content_type: str) -> Path:
+    """Resolve the file path for a given content type."""
+    if content_type in _CONTENT_ROUTES:
+        subfolder, filename = _CONTENT_ROUTES[content_type]
+        return DATA_DIR / subfolder / f"{filename}.json"
+    return DATA_DIR / "daily_content" / f"{content_type}.json"
+
+
+def _get_items(content_type: str) -> List[Dict[str, Any]]:
+    """Load items for content_type, applying type filter for wisdom variants."""
+    filepath = _resolve_path(content_type)
+    data = load_json(filepath)
+    items = data.get("items", [])
+
+    wisdom_type = _WISDOM_TYPE_FILTER.get(content_type)
+    if wisdom_type:
+        items = [i for i in items if i.get("type") == wisdom_type]
+
+    return items
+
+
 def get_random_item(content_type: str, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """
     Get a random content item that hasn't been sent to the user.
-    content_type: hadith, wisdom_short, wisdom_deep, wisdom_featured,
+    content_type: hadith, wisdom, wisdom_short, wisdom_featured, wisdom_deep,
                   daily_dua, munajat, ziyarat
     """
-    filepath = DATA_DIR / "daily_content" / f"{content_type}.json"
-    data = load_json(filepath)
-    items = data.get("items", [])
+    items = _get_items(content_type)
 
     if not items:
         return None
 
-    # Filter out already sent content if user_id provided
     if user_id is not None:
         sent_ids = db.get_sent_content_ids(user_id, content_type)
         available = [item for item in items if item.get("id") not in sent_ids]
         if available:
             items = available
-        else:
-            # All sent, reset tracking for this type
-            items = data.get("items", [])
 
     return random.choice(items)
 
@@ -61,7 +96,7 @@ def get_daily_content(user_id: int) -> Dict[str, Any]:
 
     wisdom = get_random_item("wisdom_featured", user_id)
     if not wisdom:
-        wisdom = get_random_item("wisdom_short", user_id)
+        wisdom = get_random_item("wisdom", user_id)
     if wisdom:
         result["wisdom"] = wisdom
         db.mark_content_sent(user_id, "wisdom", wisdom["id"])
@@ -81,9 +116,8 @@ def get_daily_content(user_id: int) -> Dict[str, Any]:
 
 def get_content_by_id(content_type: str, content_id: str) -> Optional[Dict[str, Any]]:
     """Get a specific content item by ID."""
-    filepath = DATA_DIR / "daily_content" / f"{content_type}.json"
-    data = load_json(filepath)
-    for item in data.get("items", []):
+    items = _get_items(content_type)
+    for item in items:
         if item.get("id") == content_id:
             return item
     return None
@@ -91,20 +125,18 @@ def get_content_by_id(content_type: str, content_id: str) -> Optional[Dict[str, 
 
 def get_all_items(content_type: str) -> List[Dict[str, Any]]:
     """Get all items of a content type."""
-    filepath = DATA_DIR / "daily_content" / f"{content_type}.json"
-    data = load_json(filepath)
-    return data.get("items", [])
+    return _get_items(content_type)
 
 
 def format_hadith(item: Dict) -> str:
     """Format a hadith item for display."""
     text = item.get("text", "")
     source = item.get("source", "")
-    imam = item.get("imam", "")
+    author = item.get("author", item.get("imam", ""))
 
     result = f"📖 <b>حديث شريف</b>\n\n"
-    if imam:
-        result += f"👤 <b>عن الإمام {imam} عليه السلام:</b>\n\n"
+    if author:
+        result += f"👤 <b>{author}</b>\n\n"
     result += f"❝ {text} ❞\n\n"
     if source:
         result += f"📚 <i>{source}</i>"
@@ -115,11 +147,11 @@ def format_wisdom(item: Dict) -> str:
     """Format a wisdom item for display."""
     text = item.get("text", "")
     source = item.get("source", "")
-    imam = item.get("imam", "")
+    author = item.get("author", item.get("imam", ""))
 
     result = f"💎 <b>حكمة</b>\n\n"
-    if imam:
-        result += f"👤 <b>الإمام {imam} عليه السلام</b>\n\n"
+    if author:
+        result += f"👤 <b>{author}</b>\n\n"
     result += f"❝ {text} ❞\n\n"
     if source:
         result += f"📚 <i>{source}</i>"
@@ -133,7 +165,8 @@ def format_dua(item: Dict) -> str:
     source = item.get("source", "")
 
     result = f"🤲 <b>{title or 'دعاء'}</b>\n\n"
-    result += f"{text}\n\n"
+    if text:
+        result += f"{text}\n\n"
     if source:
         result += f"📚 <i>{source}</i>"
     return result
@@ -148,8 +181,9 @@ def format_munajat(item: Dict) -> str:
     result = f"✨ <b>مناجاة {number or ''}</b>\n"
     if title:
         result += f"📌 {title}\n"
-    result += f"\n{text}\n\n"
-    result += "— صاحب الزمان الإمام المهدي عليه السلام"
+    result += f"\n{text[:3000]}"
+    if len(text) > 3000:
+        result += "\n\n<i>... (يتبع)</i>"
     return result
 
 
@@ -157,22 +191,24 @@ def format_ziyarat(item: Dict) -> str:
     """Format a ziyarat item for display."""
     text = item.get("text", "")
     title = item.get("title", "")
-    imam = item.get("imam", "")
+    author = item.get("author", item.get("imam", ""))
 
     result = f"🕌 <b>{title or 'زيارة'}</b>\n"
-    if imam:
-        result += f"👤 {imam} عليه السلام\n"
-    result += f"\n{text}"
+    if author:
+        result += f"👤 {author} عليه السلام\n"
+    result += f"\n{text[:3000]}"
+    if len(text) > 3000:
+        result += "\n\n<i>... (يتبع)</i>"
     return result
 
 
 def get_random_content_for_subscription(sub_type: str, user_id: int) -> Optional[Dict[str, Any]]:
     """Get content for daily subscription."""
     content_map = {
-        "hadith_daily": ("hadith", format_hadith),
-        "wisdom_daily": ("wisdom_short", format_wisdom),
-        "dua_daily": ("daily_dua", format_dua),
-        "munajat_daily": ("munajat", format_munajat),
+        "hadith_daily":  ("hadith",    format_hadith),
+        "wisdom_daily":  ("wisdom",    format_wisdom),
+        "dua_daily":     ("daily_dua", format_dua),
+        "munajat_daily": ("munajat",   format_munajat),
     }
 
     if sub_type not in content_map:

@@ -591,9 +591,7 @@ async def callback_daily_wisdom(call: CallbackQuery):
     """Handle daily wisdom."""
     item = get_random_item("wisdom_featured", call.from_user.id)
     if not item:
-        item = get_random_item("wisdom_short", call.from_user.id)
-    if not item:
-        item = get_random_item("wisdom_deep", call.from_user.id)
+        item = get_random_item("wisdom", call.from_user.id)
 
     if item:
         db.mark_content_sent(call.from_user.id, "wisdom", item["id"])

@@ -301,8 +301,25 @@ def format_taqibat(data: Dict, prayer_name: str) -> str:
     """Format taqibat content for display."""
     result = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n\n"
 
-    items = data.get("items", {})
+    items = data.get("items", [])
 
+    # Handle flat list format (new format after migration)
+    if isinstance(items, list):
+        if not items:
+            result += "سيتم إضافة المحتوى قريباً إن شاء الله."
+            return result
+        for item in items:
+            title = item.get("title", "")
+            text = item.get("text", "")
+            if title:
+                result += f"✨ <b>{title}</b>\n"
+            if text:
+                # Truncate very long texts to stay within Telegram limits
+                display = text[:1500] + "\n<i>...</i>" if len(text) > 1500 else text
+                result += f"{display}\n\n"
+        return result
+
+    # Handle legacy dict format (tasbihat / azkar / duas / taqibat sub-keys)
     if items.get("tasbihat"):
         result += "🟢 <b>التسبيحات:</b>\n"
         for item in items["tasbihat"]:

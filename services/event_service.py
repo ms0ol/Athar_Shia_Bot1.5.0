@@ -46,6 +46,24 @@ def get_hijri_month_name(month: int) -> str:
     return months.get(month, "")
 
 
+def _parse_hijri_date(item: Dict) -> tuple:
+    """
+    Parse the hijri date from an event item.
+    Supports two formats:
+      - hijri_date: "MM-DD"  (new format after migration)
+      - month + day as separate integer fields (old format)
+    Returns (month, day) as integers.
+    """
+    hijri_date = item.get("hijri_date", "")
+    if hijri_date and "-" in str(hijri_date):
+        parts = str(hijri_date).split("-")
+        try:
+            return int(parts[0]), int(parts[1])
+        except (ValueError, IndexError):
+            pass
+    return item.get("month", 0), item.get("day", 0)
+
+
 def get_today_event() -> Optional[Dict[str, Any]]:
     """Get today's event if any."""
     hijri = get_today_hijri()
@@ -53,7 +71,8 @@ def get_today_event() -> Optional[Dict[str, Any]]:
     data = load_json(filepath)
 
     for item in data.get("items", []):
-        if item.get("month") == hijri["month"] and item.get("day") == hijri["day"]:
+        month, day = _parse_hijri_date(item)
+        if month == hijri["month"] and day == hijri["day"]:
             return item
     return None
 
@@ -68,11 +87,15 @@ def get_upcoming_events(days: int = 30) -> List[Dict[str, Any]]:
     upcoming = []
 
     for item in data.get("items", []):
-        item_day = item.get("month", 0) * 30 + item.get("day", 0)
+        month, day = _parse_hijri_date(item)
+        item_day = month * 30 + day
         diff = item_day - current_day
         if 0 <= diff <= days:
-            item["days_until"] = diff
-            upcoming.append(item)
+            item_copy = dict(item)
+            item_copy["days_until"] = diff
+            item_copy["_month"] = month
+            item_copy["_day"] = day
+            upcoming.append(item_copy)
 
     return sorted(upcoming, key=lambda x: x.get("days_until", 0))
 
@@ -95,7 +118,8 @@ def get_event_by_date(month: int, day: int) -> Optional[Dict[str, Any]]:
     data = load_json(filepath)
 
     for item in data.get("items", []):
-        if item.get("month") == month and item.get("day") == day:
+        m, d = _parse_hijri_date(item)
+        if m == month and d == day:
             return item
     return None
 
@@ -110,8 +134,7 @@ def format_event(event: Dict) -> str:
     title = event.get("title", "")
     description = event.get("description", "")
     amal = event.get("amal", "")
-    month = event.get("month", 0)
-    day = event.get("day", 0)
+    month, day = _parse_hijri_date(event)
     is_happy = event.get("is_happy", False)
     is_sad = event.get("is_sad", False)
 
@@ -140,8 +163,8 @@ def format_upcoming_events(events: List[Dict]) -> str:
     for event in events:
         days = event.get("days_until", 0)
         title = event.get("title", "")
-        month = event.get("month", 0)
-        day = event.get("day", 0)
+        month = event.get("_month", 0)
+        day = event.get("_day", 0)
 
         if days == 0:
             result += f"• 📌 <b>{title}</b> - اليوم!\n"
