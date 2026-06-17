@@ -212,10 +212,15 @@ def pagination_buttons(items: list, prefix: str, page: int = 0, per_page: int = 
     end = min(start + per_page, len(items))
 
     for item in items[start:end]:
-        kb.add(make_button(
-            item.get("title", "—"),
-            f"{prefix}:item:{item.get('id', '')}"
-        ))
+        title = item.get("title") or item.get("author") or ""
+        text_preview = item.get("text", "")
+        if title:
+            label = f"{title[:45]}…" if len(title) > 45 else title
+        elif text_preview:
+            label = f"{text_preview[:45]}…" if len(text_preview) > 45 else text_preview
+        else:
+            label = item.get("id", "—")
+        kb.add(make_button(label, f"{prefix}:item:{item.get('id', '')}"))
 
     # Pagination controls
     nav_row = []

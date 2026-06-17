@@ -50,7 +50,7 @@ def _parse_hijri_date(item: Dict) -> tuple:
     """
     Parse the hijri date from an event item.
     Supports two formats:
-      - hijri_date: "MM-DD"  (new format after migration)
+      - hijri_date: "DD-MM"  (migrated format: day-month)
       - month + day as separate integer fields (old format)
     Returns (month, day) as integers.
     """
@@ -58,7 +58,9 @@ def _parse_hijri_date(item: Dict) -> tuple:
     if hijri_date and "-" in str(hijri_date):
         parts = str(hijri_date).split("-")
         try:
-            return int(parts[0]), int(parts[1])
+            day = int(parts[0])
+            month = int(parts[1])
+            return month, day
         except (ValueError, IndexError):
             pass
     return item.get("month", 0), item.get("day", 0)

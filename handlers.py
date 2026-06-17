@@ -630,31 +630,32 @@ async def callback_daily_munajat(call: CallbackQuery):
 
 
 async def callback_daily_random(call: CallbackQuery):
-    """Handle random daily content."""
+    """Handle random daily content — sends ONE randomly chosen item."""
     user_id = call.from_user.id
-    content = get_daily_content(user_id)
 
-    if not content:
+    options = [
+        ("hadith",      format_hadith),
+        ("wisdom",      format_wisdom),
+        ("daily_dua",   format_dua),
+        ("munajat",     format_munajat),
+    ]
+    random.shuffle(options)
+
+    item = None
+    formatter = None
+    for content_type, fmt in options:
+        item = get_random_item(content_type, user_id)
+        if item:
+            formatter = fmt
+            db.mark_content_sent(user_id, content_type, item["id"])
+            break
+
+    if not item:
         await call.answer("لا يوجد محتوى متوفر حالياً.", show_alert=True)
         return
 
-    # Send each content type as a separate message
-    first = True
-    for key, item in content.items():
-        formatters = {
-            "hadith": format_hadith,
-            "wisdom": format_wisdom,
-            "dua": format_dua,
-            "munajat": format_munajat,
-        }
-        text = formatters.get(key, lambda x: str(x))(item)
-
-        if first:
-            await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
-            first = False
-        else:
-            await call.message.answer(text, parse_mode="HTML")
-
+    text = formatter(item)
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
     await call.answer("✨ تم إرسال المحتوى العشوائي!")
 
 
@@ -739,20 +740,82 @@ async def cmd_city(message: Message):
     city_name = args.strip()
     # Default coordinates for common cities
     city_coords = {
-        "بغداد": (33.3152, 44.3661),
-        "كربلاء": (32.6160, 44.0248),
-        "النجف": (31.9924, 44.3140),
-        "بصرة": (30.5156, 47.7804),
-        "سامراء": (34.2009, 43.8738),
-        "كاظمية": (33.3791, 44.3368),
-        "طهران": (35.6892, 51.3890),
-        "قم": (34.6401, 50.8764),
-        "مشهد": (36.2605, 59.6168),
-        "كربلاء المقدسة": (32.6160, 44.0248),
-        "النجف الأشرف": (31.9924, 44.3140),
+        # العراق
+        "بغداد":               (33.3152, 44.3661),
+        "كربلاء":              (32.6160, 44.0248),
+        "كربلاء المقدسة":     (32.6160, 44.0248),
+        "النجف":               (31.9924, 44.3140),
+        "النجف الأشرف":       (31.9924, 44.3140),
+        "بصرة":                (30.5156, 47.7804),
+        "البصرة":              (30.5156, 47.7804),
+        "سامراء":              (34.2009, 43.8738),
+        "كاظمية":              (33.3791, 44.3368),
+        "الكاظمية":            (33.3791, 44.3368),
+        "الكوت":               (32.5000, 45.8167),
+        "ديالى":               (33.7665, 44.6441),
+        "بعقوبة":              (33.7665, 44.6441),
+        "الموصل":              (36.3350, 43.1189),
+        "موصل":                (36.3350, 43.1189),
+        "أربيل":               (36.1901, 44.0091),
+        "السليمانية":          (35.5572, 45.4350),
+        "كركوك":               (35.4681, 44.3922),
+        "الناصرية":            (31.0543, 46.2594),
+        "العمارة":             (31.8394, 47.1547),
+        "الحلة":               (32.4757, 44.4422),
+        "الديوانية":           (31.9942, 44.9166),
+        "الرمادي":             (33.4252, 43.3010),
+        "الفلوجة":             (33.3534, 43.7823),
+        "تكريت":               (34.5958, 43.6833),
+        "الحويجة":             (35.3597, 43.7442),
+        "طوزخورماتو":          (34.8764, 44.6333),
+        "زاخو":                (37.1444, 42.6825),
+        "دهوك":                (36.8669, 43.0035),
+        "هيت":                 (33.6453, 42.8272),
+        "عنه":                 (34.3699, 41.9869),
+        "الرطبة":              (33.0581, 40.2849),
+        "القائم":              (34.3791, 41.1084),
+        # إيران
+        "طهران":               (35.6892, 51.3890),
+        "قم":                  (34.6401, 50.8764),
+        "مشهد":                (36.2605, 59.6168),
+        "أصفهان":              (32.6539, 51.6660),
+        "اصفهان":              (32.6539, 51.6660),
+        "شيراز":               (29.5926, 52.5836),
+        "تبريز":               (38.0800, 46.2919),
+        "اهواز":               (31.3183, 48.6706),
+        "الأهواز":             (31.3183, 48.6706),
+        # المملكة العربية السعودية
+        "مكة":                 (21.3891, 39.8579),
+        "مكة المكرمة":         (21.3891, 39.8579),
+        "المدينة":             (24.5247, 39.5692),
+        "المدينة المنورة":     (24.5247, 39.5692),
+        "الرياض":              (24.6877, 46.7219),
+        "جدة":                 (21.4858, 39.1925),
+        "الدمام":              (26.4207, 50.0888),
+        "القطيف":              (26.5296, 50.0055),
+        # الكويت
+        "الكويت":              (29.3759, 47.9774),
+        "مدينة الكويت":        (29.3759, 47.9774),
+        # البحرين
+        "المنامة":             (26.2154, 50.5832),
+        # لبنان
+        "بيروت":               (33.8938, 35.5018),
+        # سوريا
+        "دمشق":                (33.5138, 36.2765),
     }
 
-    coords = city_coords.get(city_name, (33.3152, 44.3661))
+    coords = city_coords.get(city_name)
+    if not coords:
+        await message.answer(
+            f"⚠️ المدينة <b>{city_name}</b> غير موجودة في قاموس المدن.\n\n"
+            f"المدن المتاحة:\n"
+            f"<b>العراق:</b> بغداد، كربلاء، النجف، بصرة، الكوت، سامراء، كاظمية، الموصل، الناصرية، الحلة، ديالى...\n"
+            f"<b>إيران:</b> طهران، قم، مشهد، أصفهان، شيراز...\n"
+            f"<b>السعودية:</b> مكة، المدينة، الرياض، جدة، الدمام...\n\n"
+            f"مثال: <code>/city الكوت</code>",
+            parse_mode="HTML"
+        )
+        return
     db.update_user_location(message.from_user.id, city_name, coords[0], coords[1])
 
     await message.answer(
@@ -808,7 +871,7 @@ async def callback_pagination(call: CallbackQuery):
         items = get_all_items(content_type)
 
         if items:
-            kb = pagination_buttons(items, prefix.replace("_lib", ""), page=page, per_page=5)
+            kb = pagination_buttons(items, prefix, page=page, per_page=5)
         else:
             kb = back_button("menu:library")
 
