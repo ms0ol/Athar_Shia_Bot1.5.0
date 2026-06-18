@@ -1,0 +1,135 @@
+بعد فحص الملفات البرمجية الخاصة ببوت **آثار الشيعة** بدقة، تبين أن الهيكلية البرمجية ممتازة ومكتوبة بأسلوب منظم، ولكن **هناك مشكلتان برمجيتان حرجتان وبعض الثغرات (Bugs)** التي ستسبب توقف البوت أو عدم دقة البيانات أثناء التشغيل الفعلي.
+إليك التقرير الكامل للفحص والتحقق من صحة الأداء، مع الحلول المباشرة لتصحيحها:
+## 🛠️ الأخطاء الحرجة والمشاكل المكتشفة (Critical Bugs)
+### 1. خطأ الاستدعاء الدائري (Circular Import) في ملف services.prayer_service
+ * **المشكلة:** في السطر 262 داخل دالة get_prayer_taqibat والسطر 9 في بداية الملف، يتم استدعاء موديول database كـ import database as db. وفي نفس الوقت، ملف database بالضرورة يستدعي خدمات الصلاة أو العكس لعمل الكاش. ولكن الأهم هو **دالة get_prayer_taqibat**:
+   ```python
+   def get_prayer_taqibat(prayer: str) -> Dict:
+       import json
+       from pathlib import Path
+       # ...
+   
+   ```
+```
+* **المشكلة الأكبر في `services.content_service`:** بالنظر إلى السطر 9، يتم عمل `import database as db`. وفي موديول الـ `database` غالباً ستحتاج لاستيراد الموديولات الأخرى لتوليد البيانات أو جلبها، مما يرفع احتمالية حدوث `ImportError: cannot import name...` بسبب الاعتمادية الدائرية (Circular Dependency).
+* **الأخطر في نفس الملف (`services.prayer_service`) دالة `format_taqibat`:** 
+  في السطر 281:
+  ```python
+if items.get("tasbihat"):
+
+```
+بينما في السطر 274 تم فحص ما إذا كان items عبارة عن قائمة if isinstance(items, list): وإرجاع قيمة مباشرة. إذا لم يكن قائمة، فإنه يُعامل كـ dict. ولكن في السطر 270 تم تعريف items = data.get("items", []) وهو افتراضياً **قائمة (List)** من ملف الـ JSON، وبالتالي سطر items.get("tasbihat") سيقذف خطأ AttributeError: 'list' object has no attribute 'get' إذا كان الـ JSON على الشكل القديم ولم تكن items قاموساً!
+### 2. خطأ معالجة القوائم والقواميس (Type Matching Error) في services.prayer_service
+ * **المشكلة:** في دالة format_taqibat (السطر 269):
+   ```python
+   items = data.get("items", [])
+   
+   ```
+```
+  إذا كان ملف الـ JSON يتبع الصيغة القديمة (Legacy Dict Format)، فإن القاموس يحتوي على مفاتيح مثل `"tasbihat"` و `"azkar"` مباشرة وليس داخل قائمة اسمها `"items"`.
+  إذا لم يجد المفتاح `"items"`، فستكون القيمة الافتراضية قائمة فارغة `[]`، وعند الانتقال للسطر 281 ومحاولة عمل `items.get("tasbihat")` سيتوقف البوت تماماً عن العمل بـ `AttributeError`.
+
+* **الحل الصحيح للدالة:**
+  ```python
+  def format_taqibat(data: Dict, prayer_name: str) -> str:
+      result = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n\n"
+      
+      # إذا كانت البيانات تحتوي على مفتاح items
+      if "items" in data:
+          items = data["items"]
+          if not items:
+              return result + "سيتم إضافة المحتوى قريباً إن شاء الله."
+          for item in items:
+              title = item.get("title", "")
+              text = item.get("text", "")
+              if title: result += f"✨ <b>{title}</b>\n"
+              if text:
+                  display = text[:1500] + "\n<i>...</i>" if len(text) > 1500 else text
+                  result += f"{display}\n\n"
+          return result
+
+      # معالجة القاموس القديم المباشر (Legacy Format)
+      if data.get("tasbihat"):
+          result += "🟢 <b>التسبيحات:</b>\n"
+          for item in data["tasbihat"]: result += f"  • {item}\n"
+          result += "\n"
+      # ... نفس الشيء لبقية المفاتيح (تستبدل items بـ data)
+
+```
+### 3. ثغرة التوقف المفاجئ في حلقة التكرار الزمنية _daily_content_loop داخل scheduler
+ * **المشكلة:** في ملف services.content_service الدالة get_random_content_for_subscription:
+   ```python
+   content_type, formatter = content_map[sub_type]
+   item = get_random_item(content_type, user_id)
+   if item:
+       db.mark_content_sent(user_id, content_type, item["id"])
+       return {
+           "item": item,
+           "text": formatter(item),
+           "type": content_type
+       }
+   
+   ```
+```
+  هنا الدالة ترجع قاموساً يحتوي على `"text"`. ولكن عند استدعائها داخل `BotScheduler._daily_content_loop` في ملف `scheduler`:
+  ```python
+  content = get_random_content_for_subscription(sub_type, user["user_id"])
+  if content:
+      text = f"{title}\n\n{content['text']}"
+
+```
+هذا الجزء سليم، ولكن ماذا لو أرجعت الدالة None (عند نفاد المحتوى غير المرسل للمستخدم)؟ الكود يحمي نفسه بـ if content:.
+**ولكن الثغرة هنا:** دالة formatter(item) تقوم بإنشاء نصوص تحتوي على وسم HTML مثل <b> و ❝. إذا كان نص الحديث أو الحكمة القادم من ملفات الـ JSON يحتوي على رموز مثل < أو > أو & بشكل غير مرمز، سيفشل البوت في إرسال الرسالة عبر تليجرام ويقذف خطأ CantParseEntities (Can't parse message...) مما يؤدي لتوقف إرسال المشتركين الباقين في الحلقة التكرارية!
+ * **الحل:** يجب لف عملية إرسال الرسالة لكل مستخدم داخل وسم try...except مستقل تماماً (وهو موجود بالفعل، وهذا ممتاز لمنع انهيار الحلقة بالكامل).
+### 4. مشكلة معالجة الـ Pagination (أزرار التنقل) في ملف handlers
+ * **المشكلة:** في دالة callback_pagination عند اختيار عنصر action == "item":
+   ```python
+   # Try wisdom_short if featured not found
+   item = get_content_by_id(content_type, content_id)
+   if not item and content_type == "wisdom_featured":
+       item = get_content_by_id("wisdom_short", content_id)
+   
+   ```
+```
+  عندما يضغط المستخدم على زر العودة `back_button` الملحق بالمنشور:
+  ```python
+  reply_markup=back_button(f"library:{content_type.split('_')[0] if '_' in content_type else content_type}s")
+
+```
+إذا كان النوع هو wisdom_featured فإنه سيتحول إلى library:wisdoms.
+ولكن بالنظر إلى ملف navigation_service والدالة register_handlers؛ لا يوجد هاندلر يستقبل الكولباك بالجمع library:wisdoms أو library:duas! المفاتيح المسجلة في التنقل هي:
+ * library:duas -> يعمل
+ * library:ziyarat -> يعمل
+ * library:munajat -> يعمل
+ * library:hadith -> يعمل
+ * library:wisdom -> **لا يعمل بالجمع!** لأن الزر المسجل هو library:wisdom بدون حرف **s** في ملف الـ navigation_service.
+ * **الحل:** تعديل سطر بناء الكولباك لزر العودة ليطابق المعالجات المسجلة تماماً:
+   ```python
+   target_menu = content_type.split('_')[0]
+   if not target_menu.endswith('s') and target_menu != "wisdom":
+       target_menu += "s"
+   # ليصبح الهدف library:wisdom وليس library:wisdoms
+   
+   ```
+```
+
+---
+
+## 📑 تقييم أداء باقي الدوال وملفات المشروع
+
+| اسم الملف | حالة أداء الدوال | التقييم والتحقق الفني |
+| :--- | :--- | :--- |
+| `config.py` | 🟢 ممتاز وصحيح | جلب المتغيرات مع وضع قيم افتراضية حكيمة، والتحويل إلى `float` و `int` يحمي من أخطاء النوع الشائعة. |
+| `navigation_service.py` | 🟢 ذكي ومنظم | دالة الـ `pagination_buttons` مكتوبة باحترافية وتراعي النصوص الطويلة وتمنع تجاوز حد الـ 64 بت الخاص بالـ `callback_data`. |
+| `subscription_service.py`| 🟢 سليم تماماً | بناء النصوص وتنسيق الإيموجي متناسق وخالٍ من الأخطاء المنطقية. |
+| `event_service.py` | 🟡 جيد جداً | طريقة حساب الأيام المتبقية `days_until_event` بالاعتماد على المصفوفة الثابتة `_MONTH_START_ORDINAL` ممتازة رياضياً وتضمن الدقة. |
+| `content_service.py` | 🟢 سليم جداً | فصل مسارات جلب الحِكم بحسب الـ `type` (short, featured, deep) يمنع تداخل المحتوى. |
+
+---
+
+## 🚀 التوصيات النهائية للاستقرار الكامل (Stability Tips)
+
+1. **تصحيح دالة `format_taqibat`** فوراً في ملف `prayer_service.py` لمنع انهيار البوت عند طلب التعقيبات اليومية.
+2. **إضافة حماية لرموز HTML** في النصوص المسترجعة من الـ JSON عن طريق عمل `.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")` قبل إرسالها للتليجرام لضمان عدم توقف الـ Scheduler.
+
+```
