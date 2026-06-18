@@ -190,7 +190,11 @@ async def callback_ibadat_day_works(call: CallbackQuery):
 
     if dua:
         text += f"🤲 <b>دعاء اليوم:</b> {dua.get('title', '')}\n"
-        text += f"{dua.get('text', '')[:500]}...\n\n"
+        dua_text = dua.get('text', '')
+        if dua_text:
+            text += f"{dua_text[:500]}...\n\n"
+        else:
+            text += "اضغط على <b>دعاء اليوم</b> في القائمة لتحميل الدعاء كاملاً.\n\n"
 
     text += "📿 تذكر: الصلاة على محمد وآل محمد في كل أحوالك 🌹"
 
@@ -228,17 +232,37 @@ async def callback_ibadat_dua_today(call: CallbackQuery):
     """Handle today's dua."""
     dua = get_weekly_dua()
     if dua:
-        text = format_weekly_dua(dua)
+        await call.answer()
+        if dua.get("is_pdf") and dua.get("file_id"):
+            await call.message.answer_document(
+                dua["file_id"],
+                caption=f"🤲 <b>{dua.get('title', 'دعاء اليوم')}</b>",
+                parse_mode="HTML",
+                reply_markup=back_button("menu:ibadat")
+            )
+        else:
+            text = format_weekly_dua(dua)
+            await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
     else:
-        # Fallback to random dua
         dua = get_random_item("daily_dua", call.from_user.id)
         if dua:
-            text = format_dua(dua)
+            await call.answer()
+            if dua.get("is_pdf") and dua.get("file_id"):
+                await call.message.answer_document(
+                    dua["file_id"],
+                    caption=f"🤲 <b>{dua.get('title', 'دعاء')}</b>",
+                    parse_mode="HTML",
+                    reply_markup=back_button("menu:ibadat")
+                )
+            else:
+                await call.message.edit_text(
+                    format_dua(dua), parse_mode="HTML",
+                    reply_markup=back_button("menu:ibadat")
+                )
         else:
-            text = "🤲 لا يوجد دعاء متوفر حالياً."
-
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
-    await call.answer()
+            await call.message.edit_text("🤲 لا يوجد دعاء متوفر حالياً.", parse_mode="HTML",
+                                          reply_markup=back_button("menu:ibadat"))
+            await call.answer()
 
 
 async def callback_ibadat_taqibat(call: CallbackQuery):
@@ -297,7 +321,11 @@ async def callback_taqibat(call: CallbackQuery):
         text = f"📿 <b>تعقيبات صلاة {prayer_names.get(prayer, prayer)}</b>\n\n"
         text += "سيتم إضافة المحتوى قريباً إن شاء الله."
 
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+    try:
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+    except Exception:
+        # If edit fails (e.g. message too long after all), send a new message
+        await call.message.answer(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
     await call.answer()
 
 
@@ -401,12 +429,23 @@ async def callback_random_dua(call: CallbackQuery):
     item = get_random_item("daily_dua", call.from_user.id)
     if item:
         db.mark_content_sent(call.from_user.id, "daily_dua", item["id"])
-        text = format_dua(item)
+        await call.answer()
+        if item.get("is_pdf") and item.get("file_id"):
+            await call.message.answer_document(
+                item["file_id"],
+                caption=f"🤲 <b>{item.get('title', 'دعاء')}</b>",
+                parse_mode="HTML",
+                reply_markup=back_button("menu:library")
+            )
+        else:
+            await call.message.edit_text(
+                format_dua(item), parse_mode="HTML",
+                reply_markup=back_button("menu:library")
+            )
     else:
-        text = "🤲 لا يوجد محتوى متوفر حالياً."
-
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:library"))
-    await call.answer()
+        await call.message.edit_text("🤲 لا يوجد محتوى متوفر حالياً.", parse_mode="HTML",
+                                      reply_markup=back_button("menu:library"))
+        await call.answer()
 
 
 async def callback_random_ziyarat(call: CallbackQuery):
@@ -608,12 +647,23 @@ async def callback_daily_dua(call: CallbackQuery):
     item = get_random_item("daily_dua", call.from_user.id)
     if item:
         db.mark_content_sent(call.from_user.id, "daily_dua", item["id"])
-        text = format_dua(item)
+        await call.answer()
+        if item.get("is_pdf") and item.get("file_id"):
+            await call.message.answer_document(
+                item["file_id"],
+                caption=f"🤲 <b>{item.get('title', 'دعاء')}</b>",
+                parse_mode="HTML",
+                reply_markup=back_button("menu:daily")
+            )
+        else:
+            await call.message.edit_text(
+                format_dua(item), parse_mode="HTML",
+                reply_markup=back_button("menu:daily")
+            )
     else:
-        text = "🤲 لا يوجد محتوى متوفر حالياً."
-
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
-    await call.answer()
+        await call.message.edit_text("🤲 لا يوجد محتوى متوفر حالياً.", parse_mode="HTML",
+                                      reply_markup=back_button("menu:daily"))
+        await call.answer()
 
 
 async def callback_daily_munajat(call: CallbackQuery):

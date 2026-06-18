@@ -7,12 +7,18 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from aiogram import Bot
+import pytz
 
 import config
 import database as db
 from services.content_service import get_random_content_for_subscription
 from services.prayer_service import get_prayer_times, get_next_prayer
-from services.event_service import get_today_event, format_event
+from services.event_service import get_today_events_list, format_event
+
+
+def _now() -> datetime:
+    """Return current time in the configured timezone."""
+    return datetime.now(pytz.timezone(config.TIMEZONE))
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +59,7 @@ class BotScheduler:
         """Send prayer reminders to subscribed users."""
         while self.running:
             try:
-                now = datetime.now()
+                now = _now()
                 current_time = f"{now.hour:02d}:{now.minute:02d}"
 
                 # Get all subscribed users
@@ -125,7 +131,7 @@ class BotScheduler:
         """Send daily content to subscribed users at 6 AM."""
         while self.running:
             try:
-                now = datetime.now()
+                now = _now()
 
                 # Send at 6:00 AM
                 if now.hour == 6 and now.minute == 0:
@@ -169,25 +175,26 @@ class BotScheduler:
         """Check for daily events and notify subscribers."""
         while self.running:
             try:
-                now = datetime.now()
+                now = _now()
 
                 # Check at 5:00 AM
                 if now.hour == 5 and now.minute == 0:
-                    event = get_today_event()
+                    events = get_today_events_list()
 
-                    if event:
+                    if events:
                         users = db.get_subscribed_users("event_reminder")
 
                         for user in users:
-                            try:
-                                text = format_event(event)
-                                await self.bot.send_message(
-                                    user["user_id"],
-                                    text,
-                                    parse_mode="HTML"
-                                )
-                            except Exception as e:
-                                logger.error(f"Error sending event to {user['user_id']}: {e}")
+                            for event in events:
+                                try:
+                                    text = format_event(event)
+                                    await self.bot.send_message(
+                                        user["user_id"],
+                                        text,
+                                        parse_mode="HTML"
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error sending event to {user['user_id']}: {e}")
 
                     await asyncio.sleep(120)
 
@@ -205,7 +212,7 @@ class BotScheduler:
         """Reset daily tracking at midnight."""
         while self.running:
             try:
-                now = datetime.now()
+                now = _now()
 
                 if now.hour == 0 and now.minute == 0:
                     db.reset_daily_tracking()
@@ -226,7 +233,7 @@ class BotScheduler:
         """Send tasbih reminders at specific times."""
         while self.running:
             try:
-                now = datetime.now()
+                now = _now()
                 current_time = f"{now.hour:02d}:{now.minute:02d}"
 
                 # Remind at 9 PM for night adhkar

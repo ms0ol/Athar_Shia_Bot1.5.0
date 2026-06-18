@@ -302,6 +302,7 @@ def get_prayer_taqibat(prayer: str) -> Dict:
 
 def format_taqibat(data: Dict, prayer_name: str) -> str:
     """Format taqibat content for display."""
+    TELEGRAM_LIMIT = 3900
     result = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n\n"
 
     # New format: data contains an "items" list
@@ -310,14 +311,20 @@ def format_taqibat(data: Dict, prayer_name: str) -> str:
         if not items:
             result += "سيتم إضافة المحتوى قريباً إن شاء الله."
             return result
-        for item in items:
+        for idx, item in enumerate(items):
             title = item.get("title", "")
             text = item.get("text", "")
+            entry = ""
             if title:
-                result += f"✨ <b>{title}</b>\n"
+                entry += f"✨ <b>{title}</b>\n"
             if text:
-                display = text[:1500] + "\n<i>...</i>" if len(text) > 1500 else text
-                result += f"{display}\n\n"
+                display = text[:500] + "\n<i>...</i>" if len(text) > 500 else text
+                entry += f"{display}\n\n"
+            if len(result) + len(entry) > TELEGRAM_LIMIT:
+                remaining = len(items) - idx
+                result += f"\n<i>... و{remaining} تعقيبات أخرى</i>"
+                break
+            result += entry
         return result
 
     # Legacy format: keys like "tasbihat", "azkar", "duas", "taqibat" live directly in data
