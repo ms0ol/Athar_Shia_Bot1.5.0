@@ -91,6 +91,16 @@ def init_database():
         )
     """)
 
+    # ─── Dua File IDs (Admin-registered overrides) ───
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dua_files (
+            dua_id TEXT PRIMARY KEY,
+            file_id TEXT NOT NULL,
+            title TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -286,6 +296,49 @@ def set_state(key: str, value: str):
     """, (key, value))
     conn.commit()
     conn.close()
+
+
+# ─── Dua File ID Operations ───
+
+def get_dua_file_id(dua_id: str) -> Optional[str]:
+    """Get admin-registered file_id override for a dua."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_id FROM dua_files WHERE dua_id = ?", (dua_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row["file_id"] if row else None
+
+
+def set_dua_file_id(dua_id: str, file_id: str, title: str = "") -> bool:
+    """Save or update file_id for a dua (admin registration)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO dua_files (dua_id, file_id, title)
+            VALUES (?, ?, ?)
+            ON CONFLICT(dua_id) DO UPDATE SET
+                file_id = excluded.file_id,
+                title = excluded.title,
+                updated_at = CURRENT_TIMESTAMP
+        """, (dua_id, file_id, title))
+        conn.commit()
+        return True
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+
+
+def get_all_dua_files() -> List[Dict[str, Any]]:
+    """Get all registered dua file overrides."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT dua_id, file_id, title, updated_at FROM dua_files ORDER BY dua_id")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 # ─── Prayer Times Cache ───

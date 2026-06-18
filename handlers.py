@@ -3,9 +3,11 @@ Athar Shia Bot - Handlers
 بوت آثار الشيعة - معالجات الأوامر والأزرار
 """
 
+import logging
 import random
 from aiogram import types, Dispatcher
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.exceptions import WrongFileIdentifier, BadRequest
 
 import config
 import database as db
@@ -32,6 +34,39 @@ from services.navigation_service import (
     prayer_menu, events_menu, daily_menu, settings_menu,
     subscriptions_settings_menu, back_button, pagination_buttons
 )
+
+
+# ═══════════════════════════════════════════════════════════
+# PDF DUA HELPER
+# ═══════════════════════════════════════════════════════════
+
+async def _send_dua_pdf(call: CallbackQuery, item: dict) -> bool:
+    """
+    Send a PDF dua document. Checks DB override first, falls back to JSON file_id.
+    Returns True on success, False on failure (with user-friendly error shown).
+    """
+    dua_id = item.get("id", "")
+    title = item.get("title", "دعاء يومي")
+    caption = f"📿 <b>{title}</b>\n\nنسألكم الدعاء 🤲"
+
+    file_id = db.get_dua_file_id(dua_id) or item.get("file_id")
+
+    try:
+        await call.message.answer_document(
+            document=file_id,
+            caption=caption,
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الدعاء ✅")
+        return True
+    except (WrongFileIdentifier, BadRequest) as e:
+        logging.error(f"[DUA PDF] فشل إرسال {dua_id} ({title}): {e}")
+        await call.answer(
+            f"⚠️ ملف '{title}' غير متاح حالياً.\n"
+            "يرجى إخبار المشرف لتحديث الملف عبر أمر /duas_status",
+            show_alert=True
+        )
+        return False
 
 
 # ═══════════════════════════════════════════════════════════
@@ -240,12 +275,7 @@ async def callback_ibadat_dua_today(call: CallbackQuery):
         return
 
     if dua.get("is_pdf") and dua.get("file_id"):
-        await call.message.answer_document(
-            document=dua["file_id"],
-            caption=f"📿 <b>{dua.get('title', 'دعاء اليوم')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
+        await _send_dua_pdf(call, dua)
     elif dua.get("text"):
         text = format_weekly_dua(dua) if dua.get("weekday") else format_dua(dua)
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
@@ -278,12 +308,7 @@ async def callback_ibadat_what_to_read(call: CallbackQuery):
     db.mark_content_sent(user_id, choice, item["id"])
 
     if choice == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("✨ مقترح خاص لك!")
+        await _send_dua_pdf(call, item)
         return
 
     formatters = {
@@ -434,12 +459,7 @@ async def callback_random_dua(call: CallbackQuery):
     db.mark_content_sent(user_id, "daily_dua", item["id"])
 
     if item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
+        await _send_dua_pdf(call, item)
     elif item.get("text"):
         await call.message.edit_text(
             format_dua(item), parse_mode="HTML",
@@ -656,12 +676,7 @@ async def callback_daily_dua(call: CallbackQuery):
     db.mark_content_sent(user_id, "daily_dua", item["id"])
 
     if item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
+        await _send_dua_pdf(call, item)
     elif item.get("text"):
         await call.message.edit_text(
             format_dua(item), parse_mode="HTML",
@@ -690,21 +705,22 @@ async def callback_daily_random(call: CallbackQuery):
     user_id = call.from_user.id
 
     options = [
-        ("hadith",   format_hadith),
-        ("wisdom",   format_wisdom),
-        ("munajat",  format_munajat),
-        ("daily_dua", format_dua),
+        ("hadith",      format_hadith),
+        ("wisdom",      format_wisdom),
+        ("daily_dua",   format_dua),
+        ("munajat",     format_munajat),
     ]
     random.shuffle(options)
 
     item = None
     formatter = None
-    content_type_chosen = None
+    chosen_type = None
+
     for content_type, fmt in options:
         item = get_random_item(content_type, user_id)
         if item:
             formatter = fmt
-            content_type_chosen = content_type
+            chosen_type = content_type
             db.mark_content_sent(user_id, content_type, item["id"])
             break
 
@@ -712,17 +728,13 @@ async def callback_daily_random(call: CallbackQuery):
         await call.answer("لا يوجد محتوى متوفر حالياً.", show_alert=True)
         return
 
-    if content_type_chosen == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
-    else:
-        text = formatter(item)
-        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
-        await call.answer("✨ تم إرسال المحتوى العشوائي!")
+    if chosen_type == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
+        await _send_dua_pdf(call, item)
+        return
+
+    text = formatter(item)
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
+    await call.answer("✨ تم إرسال المحتوى العشوائي!")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -956,7 +968,6 @@ async def callback_pagination(call: CallbackQuery):
             parse_mode="HTML"
         )
         await call.answer()
-
     elif action == "item":
         content_id = parts[2]
         content_map = {
@@ -976,6 +987,22 @@ async def callback_pagination(call: CallbackQuery):
                 item = get_content_by_id("wisdom_short", content_id)
 
             if item:
+                # ✅ الفحص الذكي: إذا كان المحتوى PDF نرسله كملف
+                if item.get("is_pdf") and item.get("file_id"):
+                    try:
+                        await call.message.delete() # حذف رسالة القائمة
+                    except Exception:
+                        pass
+                    await call.message.answer_document(
+                        document=item["file_id"],
+                        caption=f"📿 <b>{item.get('title', 'محتوى')}</b>\n\nنسألكم الدعاء 🤲",
+                        parse_mode="HTML"
+                    )
+                    await call.answer("تم إرسال الملف بنجاح ✅")
+                    return
+
+                # إذا كان محتوى نصي عادي
+                text = formatter(item)
                 _back_target_map = {
                     "daily_dua":       "library:duas",
                     "ziyarat":         "library:ziyarat",
@@ -985,20 +1012,11 @@ async def callback_pagination(call: CallbackQuery):
                     "wisdom_short":    "library:wisdom",
                 }
                 back_target = _back_target_map.get(content_type, "menu:library")
-
-                if content_type == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-                    await call.message.answer_document(
-                        document=item["file_id"],
-                        caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-                        parse_mode="HTML"
-                    )
-                    await call.answer("تم إرسال ملف الدعاء ✅")
-                else:
-                    text = formatter(item)
-                    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
-                    await call.answer()
+                await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
             else:
                 await call.answer("لم يتم العثور على المحتوى.", show_alert=True)
+
+
 
 
 # ═══════════════════════════════════════════════════════════
