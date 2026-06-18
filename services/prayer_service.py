@@ -304,10 +304,9 @@ def format_taqibat(data: Dict, prayer_name: str) -> str:
     """Format taqibat content for display."""
     result = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n\n"
 
-    items = data.get("items", [])
-
-    # Handle flat list format (new format after migration)
-    if isinstance(items, list):
+    # New format: data contains an "items" list
+    if "items" in data:
+        items = data["items"]
         if not items:
             result += "سيتم إضافة المحتوى قريباً إن شاء الله."
             return result
@@ -317,33 +316,40 @@ def format_taqibat(data: Dict, prayer_name: str) -> str:
             if title:
                 result += f"✨ <b>{title}</b>\n"
             if text:
-                # Truncate very long texts to stay within Telegram limits
                 display = text[:1500] + "\n<i>...</i>" if len(text) > 1500 else text
                 result += f"{display}\n\n"
         return result
 
-    # Handle legacy dict format (tasbihat / azkar / duas / taqibat sub-keys)
-    if items.get("tasbihat"):
+    # Legacy format: keys like "tasbihat", "azkar", "duas", "taqibat" live directly in data
+    has_content = False
+    if data.get("tasbihat"):
+        has_content = True
         result += "🟢 <b>التسبيحات:</b>\n"
-        for item in items["tasbihat"]:
+        for item in data["tasbihat"]:
             result += f"  • {item}\n"
         result += "\n"
 
-    if items.get("azkar"):
+    if data.get("azkar"):
+        has_content = True
         result += "📿 <b>الأذكار:</b>\n"
-        for item in items["azkar"]:
+        for item in data["azkar"]:
             result += f"  • {item}\n"
         result += "\n"
 
-    if items.get("duas"):
+    if data.get("duas"):
+        has_content = True
         result += "🤲 <b>الأدعية:</b>\n"
-        for item in items["duas"]:
+        for item in data["duas"]:
             result += f"  • {item}\n"
         result += "\n"
 
-    if items.get("taqibat"):
+    if data.get("taqibat"):
+        has_content = True
         result += "✨ <b>التعقيبات:</b>\n"
-        for item in items["taqibat"]:
+        for item in data["taqibat"]:
             result += f"  • {item}\n"
+
+    if not has_content:
+        result += "سيتم إضافة المحتوى قريباً إن شاء الله."
 
     return result

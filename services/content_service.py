@@ -12,6 +12,11 @@ import database as db
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "normalized"
 
+
+def _escape_html(text: str) -> str:
+    """Escape HTML special characters to prevent Telegram CantParseEntities errors."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 # ─── Content Type → File Path Routing ───
 # Maps content_type → (subfolder, filename)
 _CONTENT_ROUTES = {
@@ -130,9 +135,9 @@ def get_all_items(content_type: str) -> List[Dict[str, Any]]:
 
 def format_hadith(item: Dict) -> str:
     """Format a hadith item for display."""
-    text = item.get("text", "")
-    source = item.get("source", "")
-    author = item.get("author", item.get("imam", ""))
+    text = _escape_html(item.get("text", ""))
+    source = _escape_html(item.get("source", ""))
+    author = _escape_html(item.get("author", item.get("imam", "")))
 
     result = f"📖 <b>حديث شريف</b>\n\n"
     if author:
@@ -145,9 +150,9 @@ def format_hadith(item: Dict) -> str:
 
 def format_wisdom(item: Dict) -> str:
     """Format a wisdom item for display."""
-    text = item.get("text", "")
-    source = item.get("source", "")
-    author = item.get("author", item.get("imam", ""))
+    text = _escape_html(item.get("text", ""))
+    source = _escape_html(item.get("source", ""))
+    author = _escape_html(item.get("author", item.get("imam", "")))
 
     result = f"💎 <b>حكمة</b>\n\n"
     if author:
@@ -160,9 +165,9 @@ def format_wisdom(item: Dict) -> str:
 
 def format_dua(item: Dict) -> str:
     """Format a dua item for display."""
-    text = item.get("text", "")
-    title = item.get("title", "")
-    source = item.get("source", "")
+    text = _escape_html(item.get("text", ""))
+    title = _escape_html(item.get("title", ""))
+    source = _escape_html(item.get("source", ""))
 
     result = f"🤲 <b>{title or 'دعاء'}</b>\n\n"
     if text:
@@ -174,9 +179,9 @@ def format_dua(item: Dict) -> str:
 
 def format_munajat(item: Dict) -> str:
     """Format a munajat item for display."""
-    text = item.get("text", "")
-    title = item.get("title", "")
-    number = item.get("number", "")
+    text = _escape_html(item.get("text", ""))
+    title = _escape_html(item.get("title", ""))
+    number = _escape_html(item.get("number", ""))
 
     result = f"✨ <b>مناجاة {number or ''}</b>\n"
     if title:
@@ -189,9 +194,9 @@ def format_munajat(item: Dict) -> str:
 
 def format_ziyarat(item: Dict) -> str:
     """Format a ziyarat item for display."""
-    text = item.get("text", "")
-    title = item.get("title", "")
-    author = item.get("author", item.get("imam", ""))
+    text = _escape_html(item.get("text", ""))
+    title = _escape_html(item.get("title", ""))
+    author = _escape_html(item.get("author", item.get("imam", "")))
 
     result = f"🕌 <b>{title or 'زيارة'}</b>\n"
     if author:

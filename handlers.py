@@ -291,7 +291,7 @@ async def callback_taqibat(call: CallbackQuery):
     prayer = call.data.split(":")[1]
     data = get_prayer_taqibat(prayer)
 
-    if data and data.get("items"):
+    if data:
         text = format_taqibat(data, prayer_names.get(prayer, prayer))
     else:
         text = f"📿 <b>تعقيبات صلاة {prayer_names.get(prayer, prayer)}</b>\n\n"
@@ -911,7 +911,16 @@ async def callback_pagination(call: CallbackQuery):
 
             if item:
                 text = formatter(item)
-                await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(f"library:{content_type.split('_')[0] if '_' in content_type else content_type}s"))
+                _back_target_map = {
+                    "daily_dua":       "library:duas",
+                    "ziyarat":         "library:ziyarat",
+                    "munajat":         "library:munajat",
+                    "hadith":          "library:hadith",
+                    "wisdom_featured": "library:wisdom",
+                    "wisdom_short":    "library:wisdom",
+                }
+                back_target = _back_target_map.get(content_type, "menu:library")
+                await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
             else:
                 await call.answer("لم يتم العثور على المحتوى.", show_alert=True)
 
