@@ -3,37 +3,6 @@ Athar Shia Bot - Handlers
 بوت آثار الشيعة - معالجات الأوامر والأزرار
 """
 
-import logging
-import random
-from aiogram import types, Dispatcher
-from aiogram.types import CallbackQuery, Message
-from aiogram.utils.exceptions import WrongFileIdentifier, BadRequest
-
-import config
-import database as db
-from services.content_service import (
-    get_random_item, get_daily_content, get_content_by_id,
-    format_hadith, format_wisdom, format_dua, format_munajat, format_ziyarat,
-    get_random_content_for_subscription, get_all_items
-)
-from services.prayer_service import (
-    get_prayer_times, get_next_prayer, format_prayer_times,
-    format_next_prayer, get_prayer_taqibat, format_taqibat
-)
-from services.event_service import (
-    get_today_event, get_upcoming_events, get_weekly_dua,
-    get_today_hijri, format_hijri_date, format_event,
-    format_upcoming_events, format_weekly_dua, get_hijri_calendar
-)
-from services.subscription_service import (
-    get_subscription_list, toggle_subscription, format_subscriptions_list
-)
-from services.navigation_service import (
-    main_menu, ibadat_menu, taqibat_menu,
-    library_menu, library_duas_menu, library_ziyarat_menu, library_munajat_menu,
-    prayer_menu, events_menu, daily_menu, settings_menu,
-    subscriptions_settings_menu, back_button, pagination_buttons
-)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -274,14 +243,32 @@ async def callback_ibadat_dua_today(call: CallbackQuery):
         await call.answer("🤲 عذراً، لم يتم العثور على دعاء حالياً.", show_alert=True)
         return
 
-    if dua.get("is_pdf") and dua.get("file_id"):
-        await _send_dua_pdf(call, dua)
-    elif dua.get("text"):
-        text = format_weekly_dua(dua) if dua.get("weekday") else format_dua(dua)
-        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
-        await call.answer()
-    else:
-        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
+        if dua.get("file_id"):
+            sent = await _send_dua_pdf(call, dua)
+
+            if sent:
+                return
+
+        if dua.get("text"):
+            text = (
+                format_weekly_dua(dua)
+                if dua.get("weekday")
+                else format_dua(dua)
+            )
+
+            await call.message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=back_button("menu:ibadat")
+            )
+
+            await call.answer()
+            return
+
+        await call.answer(
+            "⚠️ لا يوجد ملف أو نص لهذا الدعاء.",
+            show_alert=True
+        )
 
 
 async def callback_ibadat_taqibat(call: CallbackQuery):
@@ -458,16 +445,25 @@ async def callback_random_dua(call: CallbackQuery):
 
     db.mark_content_sent(user_id, "daily_dua", item["id"])
 
-    if item.get("is_pdf") and item.get("file_id"):
-        await _send_dua_pdf(call, item)
-    elif item.get("text"):
-        await call.message.edit_text(
-            format_dua(item), parse_mode="HTML",
-            reply_markup=back_button("menu:library")
-        )
-        await call.answer()
-    else:
-        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
+    if item.get("file_id"):
+            sent = await _send_dua_pdf(call, item)
+
+            if sent:
+                return
+
+    if item.get("text"):
+            await call.message.edit_text(
+                format_dua(item),
+                parse_mode="HTML",
+                reply_markup=back_button("menu:library")
+            )
+            await call.answer()
+            return
+
+    await call.answer(
+            "⚠️ لا يوجد ملف أو نص لهذا الدعاء.",
+        show_alert=True
+    )
 
 
 async def callback_random_ziyarat(call: CallbackQuery):
@@ -675,17 +671,25 @@ async def callback_daily_dua(call: CallbackQuery):
 
     db.mark_content_sent(user_id, "daily_dua", item["id"])
 
-    if item.get("is_pdf") and item.get("file_id"):
-        await _send_dua_pdf(call, item)
-    elif item.get("text"):
+    if item.get("file_id"):
+        sent = await _send_dua_pdf(call, item)
+
+        if sent:
+            return
+
+    if item.get("text"):
         await call.message.edit_text(
-            format_dua(item), parse_mode="HTML",
+            format_dua(item),
+            parse_mode="HTML",
             reply_markup=back_button("menu:daily")
         )
         await call.answer()
-    else:
-        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
+        return
 
+    await call.answer(
+        "⚠️ لا يوجد ملف أو نص لهذا الدعاء.",
+        show_alert=True
+    )
 
 async def callback_daily_munajat(call: CallbackQuery):
     """Handle daily munajat."""
@@ -989,17 +993,36 @@ async def callback_pagination(call: CallbackQuery):
             if item:
                 # ✅ الفحص الذكي: إذا كان المحتوى PDF نرسله كملف
                 if item.get("is_pdf") and item.get("file_id"):
+
+                    print("=" * 50)
+                    print("TITLE:", item.get("title"))
+                    print("ID:", item.get("id"))
+                    print("FILE_ID:", item.get("file_id"))
+                    print("=" * 50)
+
                     try:
-                        await call.message.delete() # حذف رسالة القائمة
+                        await call.message.delete()
                     except Exception:
                         pass
-                    await call.message.answer_document(
-                        document=item["file_id"],
-                        caption=f"📿 <b>{item.get('title', 'محتوى')}</b>\n\nنسألكم الدعاء 🤲",
-                        parse_mode="HTML"
-                    )
-                    await call.answer("تم إرسال الملف بنجاح ✅")
-                    return
+
+                    try:
+                        await call.message.answer_document(
+                            document=item["file_id"],
+                            caption=f"📿 <b>{item.get('title', 'محتوى')}</b>\n\nنسألكم الدعاء 🤲",
+                            parse_mode="HTML"
+                        )
+
+                        await call.answer("تم إرسال الملف بنجاح ✅")
+                        return
+
+                    except Exception as e:
+                        print("DOCUMENT ERROR:", e)
+
+                        await call.answer(
+                            "⚠️ الملف المخزن غير صالح",
+                            show_alert=True
+                        )
+                        return
 
                 # إذا كان محتوى نصي عادي
                 text = formatter(item)
@@ -1022,7 +1045,19 @@ async def callback_pagination(call: CallbackQuery):
 # ═══════════════════════════════════════════════════════════
 # REGISTER HANDLERS
 # ═══════════════════════════════════════════════════════════
+    async def pdf_uploader(message: Message):
 
+    document = message.document
+
+    if not document:
+        return
+
+    await message.reply(
+        f"📄 {document.file_name}\n\n"
+        f"FILE_ID:\n"
+        f"<code>{document.file_id}</code>",
+        parse_mode="HTML"
+    )
 def register_handlers(dp: Dispatcher):
     """Register all handlers with the dispatcher."""
 
@@ -1035,6 +1070,10 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(cmd_subs, commands=["subs", "subscriptions"])
     dp.register_message_handler(cmd_about, commands=["about", "help"])
     dp.register_message_handler(cmd_city, commands=["city"])
+    dp.register_message_handler(
+        pdf_uploader,
+        content_types=types.ContentType.DOCUMENT
+    )
 
     # ─── Main Menu Callbacks ───
     dp.register_callback_query_handler(callback_main_menu, lambda c: c.data == "menu:main")
