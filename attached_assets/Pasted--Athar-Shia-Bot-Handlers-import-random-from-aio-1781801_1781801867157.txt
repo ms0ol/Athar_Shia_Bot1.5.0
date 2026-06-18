@@ -275,17 +275,6 @@ async def callback_ibadat_what_to_read(call: CallbackQuery):
         await call.answer("لا يوجد محتوى متوفر حالياً.", show_alert=True)
         return
 
-    db.mark_content_sent(user_id, choice, item["id"])
-
-    if choice == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("✨ مقترح خاص لك!")
-        return
-
     formatters = {
         "hadith": format_hadith,
         "wisdom_short": format_wisdom,
@@ -294,6 +283,8 @@ async def callback_ibadat_what_to_read(call: CallbackQuery):
     }
 
     text = formatters[choice](item)
+    db.mark_content_sent(user_id, choice, item["id"])
+
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
     await call.answer("✨ مقترح خاص لك!")
 
@@ -690,21 +681,19 @@ async def callback_daily_random(call: CallbackQuery):
     user_id = call.from_user.id
 
     options = [
-        ("hadith",   format_hadith),
-        ("wisdom",   format_wisdom),
-        ("munajat",  format_munajat),
-        ("daily_dua", format_dua),
+        ("hadith",      format_hadith),
+        ("wisdom",      format_wisdom),
+        ("daily_dua",   format_dua),
+        ("munajat",     format_munajat),
     ]
     random.shuffle(options)
 
     item = None
     formatter = None
-    content_type_chosen = None
     for content_type, fmt in options:
         item = get_random_item(content_type, user_id)
         if item:
             formatter = fmt
-            content_type_chosen = content_type
             db.mark_content_sent(user_id, content_type, item["id"])
             break
 
@@ -712,17 +701,9 @@ async def callback_daily_random(call: CallbackQuery):
         await call.answer("لا يوجد محتوى متوفر حالياً.", show_alert=True)
         return
 
-    if content_type_chosen == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-        await call.message.answer_document(
-            document=item["file_id"],
-            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
-    else:
-        text = formatter(item)
-        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
-        await call.answer("✨ تم إرسال المحتوى العشوائي!")
+    text = formatter(item)
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:daily"))
+    await call.answer("✨ تم إرسال المحتوى العشوائي!")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -976,6 +957,7 @@ async def callback_pagination(call: CallbackQuery):
                 item = get_content_by_id("wisdom_short", content_id)
 
             if item:
+                text = formatter(item)
                 _back_target_map = {
                     "daily_dua":       "library:duas",
                     "ziyarat":         "library:ziyarat",
@@ -985,18 +967,7 @@ async def callback_pagination(call: CallbackQuery):
                     "wisdom_short":    "library:wisdom",
                 }
                 back_target = _back_target_map.get(content_type, "menu:library")
-
-                if content_type == "daily_dua" and item.get("is_pdf") and item.get("file_id"):
-                    await call.message.answer_document(
-                        document=item["file_id"],
-                        caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
-                        parse_mode="HTML"
-                    )
-                    await call.answer("تم إرسال ملف الدعاء ✅")
-                else:
-                    text = formatter(item)
-                    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
-                    await call.answer()
+                await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
             else:
                 await call.answer("لم يتم العثور على المحتوى.", show_alert=True)
 
