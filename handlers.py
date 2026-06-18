@@ -229,40 +229,29 @@ async def callback_ibadat_night_works(call: CallbackQuery):
 
 
 async def callback_ibadat_dua_today(call: CallbackQuery):
-    """Handle today's dua."""
+    """Handle today's dua supporting both text and PDF formats."""
     dua = get_weekly_dua()
-    if dua:
-        await call.answer()
-        if dua.get("is_pdf") and dua.get("file_id"):
-            await call.message.answer_document(
-                dua["file_id"],
-                caption=f"🤲 <b>{dua.get('title', 'دعاء اليوم')}</b>",
-                parse_mode="HTML",
-                reply_markup=back_button("menu:ibadat")
-            )
-        else:
-            text = format_weekly_dua(dua)
-            await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
-    else:
+
+    if not dua:
         dua = get_random_item("daily_dua", call.from_user.id)
-        if dua:
-            await call.answer()
-            if dua.get("is_pdf") and dua.get("file_id"):
-                await call.message.answer_document(
-                    dua["file_id"],
-                    caption=f"🤲 <b>{dua.get('title', 'دعاء')}</b>",
-                    parse_mode="HTML",
-                    reply_markup=back_button("menu:ibadat")
-                )
-            else:
-                await call.message.edit_text(
-                    format_dua(dua), parse_mode="HTML",
-                    reply_markup=back_button("menu:ibadat")
-                )
-        else:
-            await call.message.edit_text("🤲 لا يوجد دعاء متوفر حالياً.", parse_mode="HTML",
-                                          reply_markup=back_button("menu:ibadat"))
-            await call.answer()
+
+    if not dua:
+        await call.answer("🤲 عذراً، لم يتم العثور على دعاء حالياً.", show_alert=True)
+        return
+
+    if dua.get("is_pdf") and dua.get("file_id"):
+        await call.message.answer_document(
+            document=dua["file_id"],
+            caption=f"📿 <b>{dua.get('title', 'دعاء اليوم')}</b>\n\nنسألكم الدعاء 🤲",
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الدعاء ✅")
+    elif dua.get("text"):
+        text = format_weekly_dua(dua) if dua.get("weekday") else format_dua(dua)
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+        await call.answer()
+    else:
+        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
 
 
 async def callback_ibadat_taqibat(call: CallbackQuery):
@@ -425,27 +414,31 @@ async def callback_library_wisdom(call: CallbackQuery):
 # ═══════════════════════════════════════════════════════════
 
 async def callback_random_dua(call: CallbackQuery):
-    """Handle random dua."""
-    item = get_random_item("daily_dua", call.from_user.id)
-    if item:
-        db.mark_content_sent(call.from_user.id, "daily_dua", item["id"])
+    """Handle random dua supporting both text and PDF formats."""
+    user_id = call.from_user.id
+    item = get_random_item("daily_dua", user_id)
+
+    if not item:
+        await call.answer("🤲 عذراً، لم يتم العثور على أدعية متوفرة حالياً.", show_alert=True)
+        return
+
+    db.mark_content_sent(user_id, "daily_dua", item["id"])
+
+    if item.get("is_pdf") and item.get("file_id"):
+        await call.message.answer_document(
+            document=item["file_id"],
+            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الدعاء ✅")
+    elif item.get("text"):
+        await call.message.edit_text(
+            format_dua(item), parse_mode="HTML",
+            reply_markup=back_button("menu:library")
+        )
         await call.answer()
-        if item.get("is_pdf") and item.get("file_id"):
-            await call.message.answer_document(
-                item["file_id"],
-                caption=f"🤲 <b>{item.get('title', 'دعاء')}</b>",
-                parse_mode="HTML",
-                reply_markup=back_button("menu:library")
-            )
-        else:
-            await call.message.edit_text(
-                format_dua(item), parse_mode="HTML",
-                reply_markup=back_button("menu:library")
-            )
     else:
-        await call.message.edit_text("🤲 لا يوجد محتوى متوفر حالياً.", parse_mode="HTML",
-                                      reply_markup=back_button("menu:library"))
-        await call.answer()
+        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
 
 
 async def callback_random_ziyarat(call: CallbackQuery):
@@ -643,27 +636,31 @@ async def callback_daily_wisdom(call: CallbackQuery):
 
 
 async def callback_daily_dua(call: CallbackQuery):
-    """Handle daily dua."""
-    item = get_random_item("daily_dua", call.from_user.id)
-    if item:
-        db.mark_content_sent(call.from_user.id, "daily_dua", item["id"])
+    """Handle daily dua supporting both text and PDF formats."""
+    user_id = call.from_user.id
+    item = get_random_item("daily_dua", user_id)
+
+    if not item:
+        await call.answer("🤲 عذراً، لم يتم العثور على أدعية متوفرة حالياً.", show_alert=True)
+        return
+
+    db.mark_content_sent(user_id, "daily_dua", item["id"])
+
+    if item.get("is_pdf") and item.get("file_id"):
+        await call.message.answer_document(
+            document=item["file_id"],
+            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\nنسألكم الدعاء 🤲",
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الدعاء ✅")
+    elif item.get("text"):
+        await call.message.edit_text(
+            format_dua(item), parse_mode="HTML",
+            reply_markup=back_button("menu:daily")
+        )
         await call.answer()
-        if item.get("is_pdf") and item.get("file_id"):
-            await call.message.answer_document(
-                item["file_id"],
-                caption=f"🤲 <b>{item.get('title', 'دعاء')}</b>",
-                parse_mode="HTML",
-                reply_markup=back_button("menu:daily")
-            )
-        else:
-            await call.message.edit_text(
-                format_dua(item), parse_mode="HTML",
-                reply_markup=back_button("menu:daily")
-            )
     else:
-        await call.message.edit_text("🤲 لا يوجد محتوى متوفر حالياً.", parse_mode="HTML",
-                                      reply_markup=back_button("menu:daily"))
-        await call.answer()
+        await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
 
 
 async def callback_daily_munajat(call: CallbackQuery):

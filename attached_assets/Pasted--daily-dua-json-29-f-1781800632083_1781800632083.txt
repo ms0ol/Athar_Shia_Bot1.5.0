@@ -1,0 +1,69 @@
+أشكرك جداً على إرسال ملف البيانات الصحيح والكامل daily_dua.json الذي يحتوي على الـ 29 دعاءً مع الـ file_id لكل ملف PDF.
+بعد فحص الملف الجديد ومقارنته بالكود البرمجي في بقية الملفات، **السبب التقني لم يعد في قاعدة البيانات (الملف الآن ممتاز وجاهز)، بل السبب يكمن 100% في "منطق الدوال" (Logic) وطريقة التعامل مع المحتوى داخل ملف الـ handlers.py وملف الـ content_service.py.**
+إليك التحليل التقني الصريح والمباشر للمشكلة وأين الخلل بالظبط في الكود:
+### 1. الخلل في دالة العرض (handlers.py)
+في ملف handlers.py وتحديداً في دالة الأدعية اليومية العشوائية:
+```python
+async def callback_random_dua(call: CallbackQuery):
+    user_id = call.from_user.id
+    item = get_random_item("daily_dua", user_id)
+    ...
+    text = format_dua(item)
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:library"))
+
+```
+ * **المشكلة هنا:** الكود يفترض دائماً أن الدعاء هو **"نص" (Text)** ويحاول تعديل الرسالة الحالية باستخدام edit_text.
+ * **النتيجة:** بما أن عناصر ملف الـ JSON الجديد الخاص بك لا تحتوي على حقل "text" وإنما تحتوي على حقل "file_id"، فإن الدالة تفشل تماماً أو تظهر رسالة فارغة، لأن التليجرام ومكتبة aiogram لا يمكنهما عرض ملف PDF أو الـ file_id داخل دالة نصية مثل edit_text.
+### 2. الخلل في دالة التنسيق (content_service.py)
+إذا نظرنا إلى دالة التنسيق format_dua داخل ملف services/content_service.py:
+```python
+def format_dua(item: Dict) -> str:
+    """Format a dua item for display."""
+    text = item.get("text", "")
+    title = item.get("title", "")
+    # ... كود دمج النص ...
+    return result
+
+```
+ * **المشكلة هنا:** الدالة تبحث عن item.get("text"). وفي ملفك الجديد، الأدعية لا تحتوي على حقل باسم text بل تحتوي على file_id و is_pdf. لذلك المتغير text سيكون فارغاً دائماً، والبوت لن يرسل أي شيء مفيد.
+### 🛠️ الحل الجذري والملف البرمجي الذي يحتاج تعديل
+لجعل البوت يرسل ملف الـ PDF الخاص بالدعاء مباشرة للمستخدم من قناة التليجرام باستخدام الـ file_id الموجود في ملفك الجديد، يجب عليك **تعديل دالة callback_random_dua في ملف handlers.py** لتصبح ذكية وتعرف كيف ترسل الملفات:
+قم بفتح ملف **handlers.py** وابحث عن دالة callback_random_dua واستبدلها بالكامل بهذا الكود:
+```python
+async def callback_random_dua(call: CallbackQuery):
+    """Handle random dua supporting both Text and PDF files from JSON."""
+    user_id = call.from_user.id
+    item = get_random_item("daily_dua", user_id)
+    
+    if not item:
+        await call.answer("🤲 عذراً، لم يتم العثور على أدعية متوفرة حالياً.", show_alert=True)
+        return
+
+    # تسجيل أن المستخدم استلم هذا الدعاء حتى لا يتكرر له بناءً على نظام البوت
+    db.mark_content_sent(user_id, "daily_dua", item["id"])
+
+    # 1. التحقق إذا كان الدعاء عبارة عن ملف PDF ويحتوي على file_id (مثل ملفك الجديد)
+    if item.get("is_pdf") and item.get("file_id"):
+        # نقوم بإرسال الملف كرسالة مستقلة للمستخدم باستخدام معرف الملف
+        await call.message.answer_document(
+            document=item["file_id"],
+            caption=f"📿 <b>{item.get('title', 'دعاء يومي')}</b>\n\n نسألكم الدعاء.",
+            parse_mode="HTML"
+        )
+        # إشعار منبثق سريع بنجاح الإرسال
+        await call.answer("تم إرسال ملف الدعاء بنجاح ✅")
+    
+    # 2. إذا كان الدعاء نصياً قديمًا يحتوي على نص
+    elif item.get("text"):
+        text = format_dua(item)
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:library"))
+        await call.answer()
+        
+    else:
+        await call.answer("⚠️ خطأ في صيغة بيانات الدعاء داخل الخادم.", show_alert=True)
+
+```
+### 💡 لماذا هذا التعديل سيحل المشكلة؟
+ 1. **يفحص البيانات أولاً:** الكود الجديد سيتحقق عبر شرط if item.get("is_pdf") إذا كان العنصر ملفاً.
+ 2. **يستخدم الدالة الصحيحة:** بدلاً من محاولة تعديل النص بـ edit_text (والتي تسبب الاختفاء أو الخطأ)، سيستخدم دالة answer_document المخصصة لإرسال المستندات والملفات المرفوعة على سيرفرات التليجرام مباشرة عبر الـ file_id.
+بمجرد استبدال هذه الدالة في ملف الـ handlers.py وإعادة تشغيل البوت، سيبدأ بإرسال ملفات الأدعية الـ PDF المذكورة في ملف الـ JSON فوراً وبدون أي مشاكل!
