@@ -2,182 +2,182 @@
   "metadata": {
     "description": "الأدعية اليومية",
     "total": 29,
-    "migrated_at": "2026-06-17T15:18:03.936497"
+    "migrated_at": "2026-06-19T15:18:03.135Z"
   },
   "items": [
     {
       "id": "D001",
       "title": "دعاء يستشير",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAOAajE5r_guDBWit9i3AAFLwpxQW5ieAAKJpwACLHCRSXHQ31_PyVwrPAQ"
+      "file_id": "BQACAgIAAxkBAAEq62tqNSmyW-Qbz3nLZX5JRgLUbQb9fQACiacAAixwkUn8QFLdwbXoJjwE"
     },
     {
       "id": "D002",
       "title": "دعاء أبي حمزة الثمالي",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANUajE5lfdZdnBQ0AtgHJk1Ftdu4QwAAnCnAAIscJFJOI9BLoaRl1U8BA"
+      "file_id": "BQACAgIAAxkBAAEq61NqNSmy28yoOqbMCqU2fWMNxA3r2gACcKcAAixwkUmn1ZkN3FpJCDwE"
     },
     {
       "id": "D003",
       "title": "دعاء كميل بن زياد",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN6ajE5ryxm3P7OgNLzGc0e_fJ1Fl0AAoKnAAIscJFJqKT-CQFXjk08BA"
+      "file_id": "BQACAgIAAxkBAAEq62VqNSmyrbOiJuDPNQdU7YX3bQeV-wACgqcAAixwkUmIe87MbLZ-xzwE"
     },
     {
       "id": "D004",
       "title": "دعاء الحزين",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANWajE5lSiN10XxUQOXOVsz0NRoZhEAAnKnAAIscJFJtUf1UiUvy-08BA"
+      "file_id": "BQACAgIAAxkBAAEq61VqNSmys-zX3VilUtTiv5GgTXpfWgACcqcAAixwkUmUVPude0h-TTwE"
     },
     {
       "id": "D005",
       "title": "دعاء الندبة",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANRajE5ZVU2J7lmuLOENMqmHvA6fYgAAm-nAAIscJFJhrgcn2_cV2o8BA"
+      "file_id": "BQACAgIAAxkBAAEq61JqNSmyDJ8Miyn5Y_2Zfylbsj_5xwACb6cAAixwkUlYz4gFc3r6RTwE"
     },
     {
       "id": "D006",
       "title": "دعاء الافتتاح",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANXajE5le2b3DYcsX7xtYHjaAUlVrcAAnOnAAIscJFJCs6lq_Un5Cg8BA"
+      "file_id": "BQACAgIAAxkBAAEq61ZqNSmyX5BEpxa7xDJywJDszBcZSwACc6cAAixwkUl1sYn0IRkqHDwE"
     },
     {
       "id": "D007",
       "title": "دعاء الصباح",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANcajE5lU2SUJWSb0A2dzLl2BCS4S8AAninAAIscJFJIwa7eUbFoLQ8BA"
+      "file_id": "BQACAgIAAxkBAAEq61tqNSmymYAwSSN6u1fmKIAGxTRTzgACeKcAAixwkUm3N3XSIzrNUTwE"
     },
     {
       "id": "D008",
       "title": "دعاء الجوشن الصغير",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANbajE5lYG9Jo67m-XrjHWU4pN0Qq8AAnenAAIscJFJAwABUxBMaLB5PAQ"
+      "file_id": "BQACAgIAAxkBAAEq61pqNSmyTj2i2qvsh77-CPVvG8mUtQACd6cAAixwkUnQgpYLQLRBAAE8BA"
     },
     {
       "id": "D009",
       "title": "دعاء السمات",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN2ajE5r0UpHPIAAdFpnM-3TJQukmMFAAJ-pwACLHCRSWXdpIEyDiyBPAQ"
+      "file_id": "BQACAgIAAxkBAAEq62FqNSmygksaNjYSDHztmcOVHffLxQACfqcAAixwkUnzKppIiQSLhTwE"
     },
     {
       "id": "D010",
       "title": "دعاء أهل الثغور",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANaajE5lUPvgyAW6ba_u96RoLvj4_wAAnanAAIscJFJtLmqv1z2b2k8BA"
+      "file_id": "BQACAgIAAxkBAAEq61lqNSmyvmWbz8UhpeOEFCoF9KcheAACdqcAAixwkUm19UyTyDpBOjwE"
     },
     {
       "id": "D011",
       "title": "دعاء يا مفزعي عند كربتي",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN-ajE5r1oneWRwqUD8LOGQDSF4IicAAoenAAIscJFJ9F-urHraOLY8BA"
+      "file_id": "BQACAgIAAxkBAAEq62lqNSmyRbZNzLljDD_7mINN3y_vVwACh6cAAixwkUmXjOk4V2F-fDwE"
     },
     {
       "id": "D012",
       "title": "دعاء يا عدتي في كربتي",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAOCajE5r4yA95vo3upxDoZiRbO8XegAAounAAIscJFJOnmgypfoHDQ8BA"
+      "file_id": "BQACAgIAAxkBAAEq621qNSmy_ZoZ4j-wdjuCdar0esqyDwACi6cAAixwkUndcj0c3p1TCzwE"
     },
     {
       "id": "D013",
       "title": "دعاء المجير",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANxajE5r83-UbWd2PITTpy4wfK2lEsAAnmnAAIscJFJzGt_D77EeHw8BA"
+      "file_id": "BQACAgIAAxkBAAEq61xqNSmy1Fyp2Grv4w_BjUZYVqV2zAACeacAAixwkUmDDBNazCXU7jwE"
     },
     {
       "id": "D014",
       "title": "دعاء المشلول",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANyajE5r691TmJjtjbfQVXhzsMFAtcAAnqnAAIscJFJJofmR3Cj9Ao8BA"
+      "file_id": "BQACAgIAAxkBAAEq611qNSmySVW0Dqf07GvQafLkKBFxmQACeqcAAixwkUmkTzOm1ujUxDwE"
     },
     {
       "id": "D015",
       "title": "دعاء البهاء",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN3ajE5rzPhU_FUUCBv2tRzyHjZp70AAn-nAAIscJFJbpoWD5WCznc8BA"
+      "file_id": "BQACAgIAAxkBAAEq62JqNSmyH2t21-fptgYDe60-iNSshwACf6cAAixwkUmU8bES-RaDCTwE"
     },
     {
       "id": "D016",
       "title": "دعاء في زمن الغيبة",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN_ajE5rwznLmRCSh5HtxQgboH2KjEAAoinAAIscJFJs1ZgvtJVoYQ8BA"
+      "file_id": "BQACAgIAAxkBAAEq62pqNSmyEprqwgfVv8GKJ4PL63HLPAACiKcAAixwkUm8cSbjmEOZ7DwE"
     },
     {
       "id": "D017",
       "title": "دعاء العديلة",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN1ajE5r2TUSbIUuvDidOzqqAYEHH0AAn2nAAIscJFJNi4dRHAb-KE8BA"
+      "file_id": "BQACAgIAAxkBAAEq62BqNSmydxSWan6SBxVcnKzY3e9xjgACfacAAixwkUlKsBhnIJTdOTwE"
     },
     {
       "id": "D018",
       "title": "دعاء العهد",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAODajE5r17zWUKjWhu6Y_g3txGSl-cAAoynAAIscJFJStgg-kiVz_E8BA"
+      "file_id": "BQACAgIAAxkBAAEq6yxqNSX1i9UtLPqTD14DThfLKrYEOgACjKcAAixwkUlRuvdmPUzTVTwE"
     },
     {
       "id": "D019",
       "title": "دعاء القاموس",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANzajE5r0vbR5mou9bGDwov_-07YtsAAnunAAIscJFJmSF8roCKNtE8BA"
+      "file_id": "BQACAgIAAxkBAAEq615qNSmy7M5aaJjSLIXfrMRnGyi2KAACe6cAAixwkUnNWigtnwrMkDwE"
     },
     {
       "id": "D020",
       "title": "دعاء أم داوود",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANVajE5lV-Mx-ofrxat679ZMqcGcsMAAnGnAAIscJFJHYcFWWlgfa48BA"
+      "file_id": "BQACAgIAAxkBAAEq61RqNSmyIxccBhurXv23w6ZrmTqFmgACcacAAixwkUkkjISe5bLRLzwE"
     },
     {
       "id": "D021",
       "title": "دعاء رفع المصحف",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN4ajE5r3H3kshrTAZ73aQGMxPfMWYAAoCnAAIscJFJW7P3ixeYobs8BA"
+      "file_id": "BQACAgIAAxkBAAEq62NqNSmyTpjrob249i0aWopK8oM7aQACgKcAAixwkUmN2ZbWm2p-iDwE"
     },
     {
       "id": "D022",
       "title": "دعاء التوسل",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANYajE5lUdreJg8V0tqbmxEffQG6xYAAnSnAAIscJFJxmoCu1u39Ws8BA"
+      "file_id": "BQACAgIAAxkBAAEq61dqNSmyxRT2Kw59bUzXFlRjxscoVQACdKcAAixwkUldvMiaTkd-nDwE"
     },
     {
       "id": "D023",
       "title": "دعاء عند السفر",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN9ajE5ryw21Qy9r4EZZWkps8zYt10AAoanAAIscJFJndZiqmaKf_k8BA"
+      "file_id": "BQACAgIAAxkBAAEq62hqNSmyzeFDUbL1zhyx4CZziw4KEgAChqcAAixwkUljjQlr3GawVDwE"
     },
     {
       "id": "D024",
       "title": "دعاء الكساء",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAOBajE5r-vpFf_r_KUFk-vBOcYiJD0AAoqnAAIscJFJ5vXim-I1u2U8BA"
+      "file_id": "BQACAgIAAxkBAAEq62xqNSmyM8EKmXczcgo0NjarPLGURgACiqcAAixwkUlS-XxFOtOpezwE"
     },
     {
       "id": "D025",
       "title": "دعاء الجوشن الكبير",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAANZajE5ldN6g0ZVQ9qOkq1AjIYf-88AAnWnAAIscJFJ34DGJ3K26cA8BA"
+      "file_id": "BQACAgIAAxkBAAEq61hqNSmyHkLtVwgkWtkk60xU1TATaQACdacAAixwkUn0SD2z4pnuKDwE"
     },
     {
       "id": "D026",
-      "title": "التقويم الهجري",
-      "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN0ajE5r-YhCJlL4x39ngb77kNECKwAAnynAAIscJFJIaI2Or9vV788BA"
-    },
-    {
-      "id": "D027",
       "title": "دعاء العشرات",
       "is_pdf": true,
       "file_id": "BQACAgIAAxkBAAN7ajE5r_HRGcG-gA8gTp1bKNBIvKcAAoOnAAIscJFJKlcO5QeuHzo8BA"
     },
     {
-      "id": "D028",
+      "id": "0027",
       "title": "دعاء زيارة القبور",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN5ajE5rzVlJ_Ph1WQ3_10Wl6LMN6sAAoGnAAIscJFJFK3d6X6C8-48BA"
+      "file_id": "BQACAgIAAxkBAAEq62RqNSmy8RrTkpslwjYgG075Vt0kHgACgacAAixwkUnPIhb_EpOo3zwE"
+    },
+    {
+      "id": "D028",
+      "title": "دعاء علقمة",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAEq62dqNSmyT07Y6v63wIOTzdnCizRCxwAChacAAixwkUnvH9ryGusdFjwE"
     },
     {
       "id": "D029",
-      "title": "دعاء علقمة",
+      "title": "دعاء العشرات",
       "is_pdf": true,
-      "file_id": "BQACAgIAAxkBAAN8ajE5r-4YVmi15IWvcWrqTmqDGDkAAoWnAAIscJFJ9ckwowE5FdI8BA"
+      "file_id": "BQACAgIAAxkBAAEq62ZqNSmycH8amwQGUe60amxZ_tJmPAACg6cAAixwkUmZec0eCUqmAAE8BA"
     }
   ]
 }
