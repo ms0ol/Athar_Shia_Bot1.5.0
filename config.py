@@ -1,6 +1,6 @@
 """
 Athar Shia Bot - Configuration
-بوت آثار الشيعة - ملف الإعدادات
+بوت أثَر | ATHAR  الشيعة - ملف الإعدادات
 """
 
 import os
@@ -62,3 +62,7 @@ ABOUT_MESSAGE = """
 
 🤖 <b>الإصدار:</b> 1.1.0
 """
+
+# ─── Hijri Calendar Adjustment ───
+# إذا كان البوت متقدم بيوم ضع -1، وإذا كان متأخر بيوم ضع 1، وإذا كان مطابق ضع 0
+HIJRI_OFFSET = int(os.getenv("HIJRI_OFFSET", "-1"))

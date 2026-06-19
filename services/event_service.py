@@ -7,7 +7,9 @@ Athar Shia Bot - Event Service
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from hijri_converter import convert
+import config
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -42,8 +44,15 @@ def load_json(filepath: Path) -> Dict:
 # ─────────────────────────────────────────────
 
 def get_today_hijri() -> Dict[str, int]:
-    today = datetime.now()
-    h = convert.Gregorian(today.year, today.month, today.day).to_hijri()
+    # جلب الوقت الحالي
+    today_geo = datetime.now()
+
+    # تطبيق إزاحة التاريخ من الإعدادات
+    adjusted_geo = today_geo + timedelta(days=config.HIJRI_OFFSET)
+
+    # تحويل التاريخ المعدل إلى هجري
+    h = convert.Gregorian(adjusted_geo.year, adjusted_geo.month, adjusted_geo.day).to_hijri()
+
     return {
         "year":       h.year,
         "month":      h.month,
@@ -115,13 +124,50 @@ def _parse_hijri_date(item: Dict) -> tuple:
 # ─────────────────────────────────────────────
 
 def get_today_event() -> Optional[Dict[str, Any]]:
+    """Get event for today based on adjusted Hijri date."""
     hijri = get_today_hijri()
-    data  = load_json(DATA_DIR / "event_content" / "events.json")
+    day_num = int(hijri["day"])
+    month_num = int(hijri["month"])
+
+    data = load_json(DATA_DIR / "event_content" / "events.json")
+
     for item in data.get("items", []):
-        m, d = _parse_hijri_date(item)
-        if m == hijri["month"] and d == hijri["day"]:
-            return item
+        # محاولة قراءة اليوم والشهر كأرقام من الملف مباشرة لتجنب أخطاء النص
+        try:
+            item_day = int(item.get("day", 0))
+            # إذا كان الشهر مكتوباً كنص أو رقم، نحاول استخراجه من hijri_date (القسم الثاني بعد الشارطة)
+            hijri_date_parts = item.get("hijri_date", "").split("-")
+            item_month = int(hijri_date_parts[1]) if len(hijri_date_parts) > 1 else int(item.get("month", 0))
+
+            if item_day == day_num and item_month == month_num:
+                return item
+        except (ValueError, IndexError):
+            continue
+
     return None
+
+def get_today_events_list(date_dt: datetime) -> List[Dict[str, Any]]:
+    """Get list of events for a specific date (used by scheduler)."""
+    # نقوم بنفس العملية البرمجية الآمنة هنا أيضاً
+    h = convert.Gregorian(date_dt.year, date_dt.month, date_dt.day).to_hijri()
+    day_num = int(h.day)
+    month_num = int(h.month)
+
+    data = load_json(DATA_DIR / "events.json")
+    events = []
+
+    for item in data.get("items", []):
+        try:
+            item_day = int(item.get("day", 0))
+            hijri_date_parts = item.get("hijri_date", "").split("-")
+            item_month = int(hijri_date_parts[1]) if len(hijri_date_parts) > 1 else int(item.get("month", 0))
+
+            if item_day == day_num and item_month == month_num:
+                events.append(item)
+        except (ValueError, IndexError):
+            continue
+
+    return events
 
 
 def get_upcoming_events(days: int = 30) -> List[Dict[str, Any]]:
@@ -149,17 +195,6 @@ def get_upcoming_events(days: int = 30) -> List[Dict[str, Any]]:
 
     return sorted(upcoming, key=lambda x: x["days_until"])
 
-
-def get_today_events_list() -> List[Dict[str, Any]]:
-    """يُرجع كل المناسبات اليوم (قد يكون أكثر من واحدة)."""
-    hijri = get_today_hijri()
-    data  = load_json(DATA_DIR / "event_content" / "events.json")
-    result = []
-    for item in data.get("items", []):
-        m, d = _parse_hijri_date(item)
-        if m == hijri["month"] and d == hijri["day"]:
-            result.append(item)
-    return result
 
 
 def get_weekly_dua() -> Optional[Dict[str, Any]]:
