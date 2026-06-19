@@ -129,7 +129,7 @@ class PrayerCalculator:
         times = {}
 
         # Fajr: true dawn angle -16° (Ja'fari/Iraq standard)
-        fajr_time = self._compute_time(-18.2, decl, eqt, is_night=True)
+        fajr_time = self._compute_time(-18.4, decl, eqt, is_night=True)
         times["fajr"] = self._format_time(fajr_time)
 
         # Sunrise: solar altitude -0.833° (standard refraction)
