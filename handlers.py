@@ -35,33 +35,6 @@ from services.navigation_service import (
     subscriptions_settings_menu, back_button, pagination_buttons
 )
 
-async def _send_dua_pdf(call: CallbackQuery, item: dict) -> bool:
-    """
-    Send a PDF dua document. Checks DB override first, falls back to JSON file_id.
-    Returns True on success, False on failure (with user-friendly error shown).
-    """
-    dua_id = item.get("id", "")
-    title = item.get("title", "دعاء يومي")
-    caption = f"📿 <b>{title}</b>\n\nنسألكم الدعاء 🤲"
-
-    file_id = db.get_dua_file_id(dua_id) or item.get("file_id")
-
-    try:
-        await call.message.answer_document(
-            document=file_id,
-            caption=caption,
-            parse_mode="HTML"
-        )
-        await call.answer("تم إرسال ملف الدعاء ✅")
-        return True
-    except (WrongFileIdentifier, BadRequest) as e:
-        logging.error(f"[DUA PDF] فشل إرسال {dua_id} ({title}): {e}")
-        await call.answer(
-            f"⚠️ ملف '{title}' غير متاح حالياً.\n"
-            "يرجى إخبار المشرف لتحديث الملف عبر أمر /duas_status",
-            show_alert=True
-        )
-        return False
 # ═══════════════════════════════════════════════════════════
 # PDF DUA HELPER
 # ═══════════════════════════════════════════════════════════

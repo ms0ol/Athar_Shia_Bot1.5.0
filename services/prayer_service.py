@@ -129,7 +129,7 @@ class PrayerCalculator:
         times = {}
 
         # Fajr: true dawn angle -16° (Ja'fari/Iraq standard)
-        fajr_time = self._compute_time(-16.0, decl, eqt, is_night=True)
+        fajr_time = self._compute_time(-19.5, decl, eqt, is_night=True)
         times["fajr"] = self._format_time(fajr_time)
 
         # Sunrise: solar altitude -0.833° (standard refraction)
@@ -154,7 +154,7 @@ class PrayerCalculator:
 
         # Maghrib (Ja'fari): disappearance of redness from eastern sky ≈ sunset + ~17min
         # Modeled as solar altitude -4° after sunset
-        maghrib_time = self._compute_time(-4.0, decl, eqt, is_night=False)
+        maghrib_time = self._compute_time(-4.7, decl, eqt, is_night=False)
         times["maghrib"] = self._format_time(maghrib_time)
 
         # Isha: disappearance of evening twilight glow, angle -14° (Ja'fari standard)
