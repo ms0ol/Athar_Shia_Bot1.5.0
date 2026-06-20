@@ -29,6 +29,7 @@ def main_menu() -> InlineKeyboardMarkup:
         make_button("🕌 الصلاة والأذان", "menu:prayer"),
         make_button("🗓 المناسبات والأعمال", "menu:events"),
         make_button("✨ المحتوى اليومي", "menu:daily"),
+        make_button("⭐ مفضلاتي", "menu:favorites"),
         make_button("⚙️ إعداداتي", "menu:settings"),
     )
     return kb
@@ -241,4 +242,32 @@ def share_button(content_type: str, content_id: str) -> InlineKeyboardMarkup:
     """Create a share button for content."""
     kb = InlineKeyboardMarkup()
     kb.add(make_button("📤 مشاركة", f"share:{content_type}:{content_id}"))
+    return kb
+
+
+# ─── Favorites Menu ───
+
+def favorites_menu() -> InlineKeyboardMarkup:
+    """Build favorites main menu."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        make_button("📖 أحاديث محفوظة", "fav:list:hadith:0"),
+        make_button("💎 حكم محفوظة", "fav:list:wisdom:0"),
+        make_button("🤲 أدعية محفوظة", "fav:list:daily_dua:0"),
+        make_button("✨ مناجيات محفوظة", "fav:list:munajat:0"),
+        make_button("🕌 زيارات محفوظة", "fav:list:ziyarat:0"),
+        make_button("🔙 الرئيسية", "menu:main"),
+    )
+    return kb
+
+
+def content_actions_keyboard(content_type: str, content_id: str,
+                              back_target: str, is_fav: bool = False) -> InlineKeyboardMarkup:
+    """Build action keyboard under content: favorites toggle + back button."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    if is_fav:
+        fav_btn = make_button("💔 إزالة من المفضلة", f"fav:rm:{content_type}:{content_id}")
+    else:
+        fav_btn = make_button("⭐ أضف للمفضلة", f"fav:add:{content_type}:{content_id}")
+    kb.add(fav_btn, make_button("🔙 رجوع", back_target))
     return kb

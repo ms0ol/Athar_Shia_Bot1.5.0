@@ -3,10 +3,14 @@ Athar Shia Bot - Handlers
 بوت أثر الشيعة - معالجات الأوامر والأزرار
 """
 
+import asyncio
 import logging
 import random
 from aiogram import types, Dispatcher
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery, Message,
+    InlineKeyboardMarkup, InlineKeyboardButton,
+)
 from aiogram.utils.exceptions import WrongFileIdentifier, BadRequest
 
 import config
@@ -32,7 +36,8 @@ from services.navigation_service import (
     main_menu, ibadat_menu, taqibat_menu,
     library_menu, library_duas_menu, library_ziyarat_menu, library_munajat_menu,
     prayer_menu, events_menu, daily_menu, settings_menu,
-    subscriptions_settings_menu, back_button, pagination_buttons
+    subscriptions_settings_menu, back_button, pagination_buttons,
+    favorites_menu, content_actions_keyboard, make_button,
 )
 
 # ═══════════════════════════════════════════════════════════
@@ -1010,11 +1015,291 @@ async def callback_pagination(call: CallbackQuery):
                     "wisdom_short":    "library:wisdom",
                 }
                 back_target = _back_target_map.get(content_type, "menu:library")
-                await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button(back_target))
+                fav_type = {"wisdom_featured": "wisdom", "wisdom_short": "wisdom"}.get(content_type, content_type)
+                is_fav = db.is_favorite(call.from_user.id, fav_type, content_id)
+                await call.message.edit_text(
+                    text, parse_mode="HTML",
+                    reply_markup=content_actions_keyboard(fav_type, content_id, back_target, is_fav)
+                )
             else:
                 await call.answer("لم يتم العثور على المحتوى.", show_alert=True)
 
 
+
+
+# ═══════════════════════════════════════════════════════════
+# FAVORITES HANDLERS
+# ═══════════════════════════════════════════════════════════
+
+async def callback_favorites_menu(call: CallbackQuery):
+    """Show favorites main menu."""
+    count = db.get_favorites_count(call.from_user.id)
+    text = (
+        f"⭐ <b>مفضلاتي</b>\n\n"
+        f"لديك <b>{count}</b> عنصر محفوظ.\n"
+        "اختر النوع لعرض المحفوظات:"
+    )
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=favorites_menu())
+    await call.answer()
+
+
+async def callback_favorites_list(call: CallbackQuery):
+    """Show paginated list of favorites for a specific content type."""
+    parts = call.data.split(":")
+    content_type = parts[2]
+    page = int(parts[3]) if len(parts) > 3 else 0
+
+    type_labels = {
+        "hadith":    "📖 أحاديث محفوظة",
+        "wisdom":    "💎 حكم محفوظة",
+        "daily_dua": "🤲 أدعية محفوظة",
+        "munajat":   "✨ مناجيات محفوظة",
+        "ziyarat":   "🕌 زيارات محفوظة",
+    }
+    label = type_labels.get(content_type, "⭐ محفوظات")
+    favs = db.get_favorites(call.from_user.id, content_type)
+
+    if not favs:
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(make_button("🔙 المفضلة", "menu:favorites"))
+        await call.message.edit_text(
+            f"{label}\n\nلا يوجد محتوى محفوظ من هذا النوع.",
+            parse_mode="HTML", reply_markup=kb
+        )
+        await call.answer()
+        return
+
+    per_page = 5
+    total_pages = max(1, (len(favs) + per_page - 1) // per_page)
+    page = max(0, min(page, total_pages - 1))
+    start = page * per_page
+    chunk = favs[start:start + per_page]
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    for fav in chunk:
+        title = fav.get("title") or fav["content_id"]
+        btn_label = (title[:44] + "…") if len(title) > 45 else title
+        kb.add(make_button(btn_label, f"fav:view:{content_type}:{fav['content_id']}"))
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(make_button("◀️ السابق", f"fav:list:{content_type}:{page - 1}"))
+    if page < total_pages - 1:
+        nav_row.append(make_button("التالي ▶️", f"fav:list:{content_type}:{page + 1}"))
+    if nav_row:
+        kb.row(*nav_row)
+    kb.add(make_button("🔙 المفضلة", "menu:favorites"))
+
+    await call.message.edit_text(
+        f"{label}\n\n({len(favs)} عنصر، صفحة {page + 1}/{total_pages}):",
+        parse_mode="HTML", reply_markup=kb
+    )
+    await call.answer()
+
+
+async def callback_favorites_view(call: CallbackQuery):
+    """View a specific favorite item with remove button."""
+    parts = call.data.split(":")
+    content_type = parts[2]
+    content_id = parts[3]
+
+    formatters = {
+        "hadith":    format_hadith,
+        "wisdom":    format_wisdom,
+        "daily_dua": format_dua,
+        "munajat":   format_munajat,
+        "ziyarat":   format_ziyarat,
+    }
+    item = get_content_by_id(content_type, content_id)
+    formatter = formatters.get(content_type)
+
+    if not item or not formatter:
+        await call.answer("لم يتم العثور على المحتوى.", show_alert=True)
+        return
+
+    text = formatter(item)
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        make_button("💔 إزالة من المفضلة", f"fav:rm:{content_type}:{content_id}"),
+        make_button("🔙 المفضلة", f"fav:list:{content_type}:0"),
+    )
+    try:
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        await call.message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await call.answer()
+
+
+async def callback_fav_toggle(call: CallbackQuery):
+    """Add or remove an item from favorites, then refresh the button."""
+    parts = call.data.split(":")
+    action = parts[1]        # "add" or "rm"
+    content_type = parts[2]
+    content_id = parts[3]
+    user_id = call.from_user.id
+
+    if action == "add":
+        item = get_content_by_id(content_type, content_id)
+        title = ""
+        if item:
+            title = (item.get("title") or item.get("text", ""))[:60]
+        db.add_favorite(user_id, content_type, content_id, title)
+        new_action, new_label = "rm", "💔 إزالة من المفضلة"
+        await call.answer("⭐ تم الحفظ في المفضلة!")
+    else:
+        db.remove_favorite(user_id, content_type, content_id)
+        new_action, new_label = "add", "⭐ أضف للمفضلة"
+        await call.answer("💔 تم الإزالة من المفضلة.")
+
+    try:
+        old_kb = call.message.reply_markup
+        new_kb = InlineKeyboardMarkup(row_width=1)
+        for row in old_kb.inline_keyboard:
+            new_row = []
+            for btn in row:
+                cd = btn.callback_data or ""
+                if cd.startswith("fav:add:") or cd.startswith("fav:rm:"):
+                    new_row.append(InlineKeyboardButton(
+                        text=new_label,
+                        callback_data=f"fav:{new_action}:{content_type}:{content_id}"
+                    ))
+                else:
+                    new_row.append(btn)
+            new_kb.row(*new_row)
+        await call.message.edit_reply_markup(reply_markup=new_kb)
+    except Exception as e:
+        logger.warning(f"Keyboard update error: {e}")
+
+
+# ═══════════════════════════════════════════════════════════
+# ADMIN HANDLERS
+# ═══════════════════════════════════════════════════════════
+
+def _is_admin(user_id: int) -> bool:
+    return user_id in config.ADMIN_IDS
+
+
+async def cmd_stats(message: Message):
+    """Admin: display bot statistics."""
+    if not _is_admin(message.from_user.id):
+        return
+
+    total = db.get_user_count()
+    new_7d = db.get_new_users_count(7)
+    new_30d = db.get_new_users_count(30)
+    active_7d = db.get_active_users_count(7)
+    sub_counts = db.get_subscription_counts()
+    db_size = db.get_db_size()
+
+    sub_text = "\n".join(f"  • {k}: {v}" for k, v in sub_counts.items()) or "  لا يوجد"
+
+    text = (
+        f"📊 <b>إحصائيات أثَر | ATHAR</b>\n\n"
+        f"👥 <b>المستخدمون:</b>\n"
+        f"  • الإجمالي: {total}\n"
+        f"  • جدد (7 أيام): {new_7d}\n"
+        f"  • جدد (30 يوم): {new_30d}\n"
+        f"  • نشطون (7 أيام): {active_7d}\n\n"
+        f"🔔 <b>الاشتراكات الفعالة:</b>\n{sub_text}\n\n"
+        f"💾 قاعدة البيانات: {db_size:.1f} KB"
+    )
+    await message.answer(text, parse_mode="HTML")
+
+
+async def cmd_broadcast(message: Message):
+    """Admin: broadcast a message to all users."""
+    if not _is_admin(message.from_user.id):
+        return
+
+    text = message.get_args()
+    if not text:
+        await message.answer(
+            "📢 <b>بث رسالة لجميع المستخدمين:</b>\n"
+            "<code>/broadcast نص الرسالة</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    users = db.get_all_users()
+    await message.answer(f"📢 جاري الإرسال إلى {len(users)} مستخدم…")
+
+    sent = failed = 0
+    for user in users:
+        try:
+            await message.bot.send_message(user["user_id"], text, parse_mode="HTML")
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            failed += 1
+
+    await message.answer(
+        f"✅ <b>اكتمل البث</b>\n\n• تم الإرسال: {sent}\n• فشل: {failed}",
+        parse_mode="HTML"
+    )
+
+
+async def cmd_content_status(message: Message):
+    """Admin: display content files health report."""
+    if not _is_admin(message.from_user.id):
+        return
+
+    from pathlib import Path
+    import json as _json
+
+    DATA_DIR = Path("data/normalized")
+    files_to_check = [
+        ("daily_content/hadith.json",       "الأحاديث"),
+        ("daily_content/wisdom.json",        "الحكم"),
+        ("daily_content/daily_dua.json",     "الأدعية اليومية"),
+        ("library/munajat.json",             "المناجيات"),
+        ("library/ziyarat.json",             "الزيارات"),
+        ("library/duas.json",                "أدعية المكتبة"),
+        ("event_content/events.json",        "المناسبات"),
+        ("event_content/weekly_duas.json",   "الأدعية الأسبوعية"),
+        ("prayer_content/fajr.json",         "تعقيبات الفجر"),
+        ("prayer_content/dhuhr.json",        "تعقيبات الظهر"),
+        ("prayer_content/maghrib.json",      "تعقيبات المغرب"),
+        ("prayer_content/isha.json",         "تعقيبات العشاء"),
+    ]
+
+    lines = ["🔍 <b>حالة ملفات المحتوى</b>\n"]
+    for rel_path, label in files_to_check:
+        fpath = DATA_DIR / rel_path
+        if not fpath.exists():
+            lines.append(f"❌ {label}: غير موجود")
+            continue
+        try:
+            with open(fpath, encoding="utf-8") as f:
+                data = _json.load(f)
+            count = len(data.get("items", []))
+            size_kb = fpath.stat().st_size / 1024
+            icon = "✅" if count >= 5 else ("🔶" if count > 0 else "⚠️")
+            lines.append(f"{icon} {label}: {count} عنصر ({size_kb:.1f} KB)")
+        except Exception as e:
+            lines.append(f"❌ {label}: خطأ — {e}")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+async def cmd_errors(message: Message):
+    """Admin: show recent error log entries."""
+    if not _is_admin(message.from_user.id):
+        return
+
+    errors = db.get_error_logs(10)
+    if not errors:
+        await message.answer("✅ لا توجد أخطاء مسجلة.")
+        return
+
+    lines = ["⚠️ <b>آخر 10 أخطاء:</b>\n"]
+    for err in errors:
+        lines.append(
+            f"🔸 {str(err.get('logged_at', ''))[:16]}\n"
+            f"   المستخدم: {err.get('user_id', '—')}\n"
+            f"   الأمر: {err.get('command', '—')}\n"
+            f"   الخطأ: {str(err.get('error_msg', ''))[:100]}\n"
+        )
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1093,3 +1378,15 @@ def register_handlers(dp: Dispatcher):
 
     # ─── Pagination ───
     dp.register_callback_query_handler(callback_pagination, lambda c: c.data.startswith(("dua_lib:", "ziyarat_lib:", "munajat_lib:", "hadith_lib:", "wisdom_lib:")))
+
+    # ─── Favorites ───
+    dp.register_callback_query_handler(callback_favorites_menu, lambda c: c.data == "menu:favorites")
+    dp.register_callback_query_handler(callback_favorites_list, lambda c: c.data.startswith("fav:list:"))
+    dp.register_callback_query_handler(callback_favorites_view, lambda c: c.data.startswith("fav:view:"))
+    dp.register_callback_query_handler(callback_fav_toggle, lambda c: c.data.startswith(("fav:add:", "fav:rm:")))
+
+    # ─── Admin Commands ───
+    dp.register_message_handler(cmd_stats, commands=["stats"])
+    dp.register_message_handler(cmd_broadcast, commands=["broadcast"])
+    dp.register_message_handler(cmd_content_status, commands=["content_status"])
+    dp.register_message_handler(cmd_errors, commands=["errors"])

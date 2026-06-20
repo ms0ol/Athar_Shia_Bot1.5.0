@@ -20,6 +20,7 @@ import config
 import database as db
 from handlers import register_handlers
 from scheduler import BotScheduler
+from middleware import RateLimitMiddleware
 
 # ─── Logging Setup ───
 
@@ -109,6 +110,10 @@ def main():
 ╚══════════════════════════════════════════════════════════════╝
         """)
         sys.exit(1)
+
+    # Register rate limit middleware
+    dp.middleware.setup(RateLimitMiddleware(admin_ids=config.ADMIN_IDS))
+    logger.info("✅ Rate limit middleware registered")
 
     # Register all handlers
     register_handlers(dp)

@@ -38,10 +38,13 @@ class BotScheduler:
 
         self.tasks = [
             asyncio.create_task(self._prayer_reminder_loop()),
+            asyncio.create_task(self._pre_prayer_reminder_loop()),
             asyncio.create_task(self._daily_content_loop()),
             asyncio.create_task(self._event_check_loop()),
             asyncio.create_task(self._midnight_reset_loop()),
             asyncio.create_task(self._tasbih_reminder_loop()),
+            asyncio.create_task(self._weekly_report_loop()),
+            asyncio.create_task(self._content_health_loop()),
         ]
 
         logger.info("✅ Scheduler started with %d tasks", len(self.tasks))
@@ -268,6 +271,162 @@ class BotScheduler:
                 break
             except Exception as e:
                 logger.error(f"Error in tasbih reminder loop: {e}")
+                await asyncio.sleep(60)
+
+    # ─── Pre-Prayer Reminder (15 min before) ───
+
+    async def _pre_prayer_reminder_loop(self):
+        """Send reminder 15 minutes before each prayer to subscribed users."""
+        while self.running:
+            try:
+                now = _now()
+                future = now + timedelta(minutes=15)
+                future_time = f"{future.hour:02d}:{future.minute:02d}"
+
+                users = db.get_subscribed_users("prayer_reminder")
+
+                for user in users:
+                    try:
+                        times = get_prayer_times(
+                            user.get("latitude", config.LATITUDE),
+                            user.get("longitude", config.LONGITUDE),
+                            user.get("timezone", config.TIMEZONE),
+                            user.get("city", config.CITY)
+                        )
+                        prayer_names_ar = {
+                            "fajr":    "الفجر 🌅",
+                            "dhuhr":   "الظهر ☀️",
+                            "asr":     "العصر 🌤",
+                            "maghrib": "المغرب 🌇",
+                            "isha":    "العشاء 🌙",
+                        }
+                        for prayer, time_str in times.items():
+                            if prayer in ["sunrise", "midnight", "asr"]:
+                                continue
+                            if time_str == future_time:
+                                text = (
+                                    f"⏰ <b>تذكير: صلاة {prayer_names_ar.get(prayer, prayer)} بعد 15 دقيقة</b>\n\n"
+                                    f"📍 {user.get('city', config.CITY)}\n"
+                                    f"🕐 موعد الصلاة: {time_str}\n\n"
+                                    f"📿 استعد وأوضأ من الآن\n"
+                                    f"🤲 الصلاة على محمد وآل محمد"
+                                )
+                                await self.bot.send_message(
+                                    user["user_id"], text, parse_mode="HTML"
+                                )
+                    except Exception as e:
+                        logger.error(f"Pre-prayer reminder error for {user['user_id']}: {e}")
+
+                await asyncio.sleep(60)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in pre-prayer reminder loop: {e}")
+                await asyncio.sleep(60)
+
+    # ─── Weekly Admin Report ───
+
+    async def _weekly_report_loop(self):
+        """Send weekly stats report to admin every Sunday at 7:00 AM."""
+        while self.running:
+            try:
+                now = _now()
+                if now.weekday() == 6 and now.hour == 7 and now.minute == 0:
+                    total = db.get_user_count()
+                    new_7d = db.get_new_users_count(7)
+                    active_7d = db.get_active_users_count(7)
+                    sub_counts = db.get_subscription_counts()
+                    db_size = db.get_db_size()
+
+                    sub_text = "\n".join(
+                        f"  • {k}: {v}" for k, v in sub_counts.items()
+                    ) or "  لا يوجد"
+
+                    text = (
+                        f"📊 <b>التقرير الأسبوعي — أثَر | ATHAR</b>\n"
+                        f"📅 {now.strftime('%Y-%m-%d')}\n\n"
+                        f"👥 <b>المستخدمون:</b>\n"
+                        f"  • الإجمالي: {total}\n"
+                        f"  • جدد هذا الأسبوع: {new_7d}\n"
+                        f"  • نشطون هذا الأسبوع: {active_7d}\n\n"
+                        f"🔔 <b>الاشتراكات الفعالة:</b>\n{sub_text}\n\n"
+                        f"💾 قاعدة البيانات: {db_size:.1f} KB"
+                    )
+                    for admin_id in config.ADMIN_IDS:
+                        try:
+                            await self.bot.send_message(admin_id, text, parse_mode="HTML")
+                        except Exception as e:
+                            logger.error(f"Weekly report error for admin {admin_id}: {e}")
+
+                    await asyncio.sleep(120)
+
+                await asyncio.sleep(55)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in weekly report loop: {e}")
+                await asyncio.sleep(60)
+
+    # ─── Content Health Monitor ───
+
+    async def _content_health_loop(self):
+        """Check content files health and notify admin daily at 3:00 AM."""
+        while self.running:
+            try:
+                now = _now()
+                if now.hour == 3 and now.minute == 0:
+                    from pathlib import Path
+                    import json as _json
+
+                    DATA_DIR = Path("data/normalized")
+                    files_to_check = [
+                        ("daily_content/hadith.json",       "الأحاديث"),
+                        ("daily_content/wisdom.json",        "الحكم"),
+                        ("daily_content/daily_dua.json",     "الأدعية اليومية"),
+                        ("library/munajat.json",             "المناجيات"),
+                        ("library/ziyarat.json",             "الزيارات"),
+                        ("library/duas.json",                "أدعية المكتبة"),
+                        ("event_content/events.json",        "المناسبات"),
+                        ("event_content/weekly_duas.json",   "الأدعية الأسبوعية"),
+                    ]
+                    issues = []
+                    for rel_path, label in files_to_check:
+                        fpath = DATA_DIR / rel_path
+                        if not fpath.exists():
+                            issues.append(f"❌ {label}: الملف غير موجود")
+                            continue
+                        try:
+                            with open(fpath, encoding="utf-8") as f:
+                                data = _json.load(f)
+                            count = len(data.get("items", []))
+                            if count == 0:
+                                issues.append(f"⚠️ {label}: فارغ (0 عناصر)")
+                            elif count < 5:
+                                issues.append(f"🔶 {label}: قليل ({count} عناصر)")
+                        except Exception as e:
+                            issues.append(f"❌ {label}: خطأ في القراءة")
+
+                    if issues:
+                        text = "🔍 <b>تقرير صحة المحتوى اليومي</b>\n\n" + "\n".join(issues)
+                    else:
+                        text = "✅ <b>تقرير صحة المحتوى اليومي</b>\n\nجميع الملفات سليمة."
+
+                    for admin_id in config.ADMIN_IDS:
+                        try:
+                            await self.bot.send_message(admin_id, text, parse_mode="HTML")
+                        except Exception as e:
+                            logger.error(f"Content health error for admin {admin_id}: {e}")
+
+                    await asyncio.sleep(120)
+
+                await asyncio.sleep(55)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in content health loop: {e}")
                 await asyncio.sleep(60)
 
     # ─── Manual Trigger (for admin) ───
