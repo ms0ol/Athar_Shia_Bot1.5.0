@@ -1302,6 +1302,21 @@ async def cmd_errors(message: Message):
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 
+async def cmd_id(message: Message):
+    """Send user's Telegram ID (useful for admin setup)."""
+    user_id = message.from_user.id
+    username = message.from_user.username or "—"
+    first_name = message.from_user.first_name or "—"
+    await message.answer(
+        f"💼 <b>معلوماتك في تليجرام</b>\n\n"
+        f"🆔 ID: <code>{user_id}</code>\n"
+        f"👤 الاسم: {first_name}\n"
+        f"👀 المعرف: @{username}\n\n"
+        f"للاشتراكي: <code>{user_id}</code>",
+        parse_mode="HTML"
+    )
+
+
 # ═══════════════════════════════════════════════════════════
 # REGISTER HANDLERS
 # ═══════════════════════════════════════════════════════════
@@ -1390,3 +1405,6 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(cmd_broadcast, commands=["broadcast"])
     dp.register_message_handler(cmd_content_status, commands=["content_status"])
     dp.register_message_handler(cmd_errors, commands=["errors"])
+
+    # ─── User ID Helper ───
+    dp.register_message_handler(cmd_id, commands=["id", "myid"])

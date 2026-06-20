@@ -259,6 +259,8 @@ def pagination_buttons(items: list, prefix: str, page: int = 0, per_page: int = 
     if nav_row:
         kb.row(*nav_row)
 
+    kb.add(make_button("🏠 الرئيسية", "menu:main"))
+
     return kb
 
 
