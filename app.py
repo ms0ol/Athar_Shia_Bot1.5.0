@@ -58,8 +58,8 @@ async def on_startup(dispatcher):
     # Start scheduler
     await scheduler.start()
 
-    # Set bot commands
-    await bot.set_my_commands([
+    # Set bot commands (global — for all users)
+    base_commands = [
         types.BotCommand("start", "بدء البوت وعرض القائمة الرئيسية"),
         types.BotCommand("menu", "القائمة الرئيسية"),
         types.BotCommand("prayer", "مواقيت الصلاة"),
@@ -67,9 +67,26 @@ async def on_startup(dispatcher):
         types.BotCommand("daily", "المحتوى اليومي"),
         types.BotCommand("subs", "إدارة الاشتراكات"),
         types.BotCommand("city", "تغيير المدينة"),
-        types.BotCommand("about", "حول البوت"),
-        types.BotCommand("help", "المساعدة"),
-    ])
+        types.BotCommand("about", "المساعدة والأوامر"),
+        types.BotCommand("id", "الحصول على معرفك"),
+    ]
+    await bot.set_my_commands(base_commands)
+
+    # Set admin-only commands for each admin
+    admin_commands = base_commands + [
+        types.BotCommand("stats", "إحصائيات البوت (أدمن)"),
+        types.BotCommand("broadcast", "بث رسالة (أدمن)"),
+        types.BotCommand("content_status", "صحة المحتوى (أدمن)"),
+        types.BotCommand("errors", "آخر الأخطاء (أدمن)"),
+    ]
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.set_my_commands(
+                admin_commands,
+                scope=types.BotCommandScopeChat(chat_id=admin_id)
+            )
+        except Exception as e:
+            logger.warning(f"Could not set admin commands for {admin_id}: {e}")
     logger.info("✅ Bot commands set")
 
     logger.info("🟢 Bot is running!")

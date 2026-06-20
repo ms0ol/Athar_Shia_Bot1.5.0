@@ -130,8 +130,42 @@ async def cmd_subs(message: Message):
 
 
 async def cmd_about(message: Message):
-    """Handle /about command."""
-    await message.answer(config.ABOUT_MESSAGE, parse_mode="HTML")
+    """Handle /about and /help commands."""
+    is_admin = _is_admin(message.from_user.id)
+
+    text = (
+        "💡 <b>المساعدة — أثَر | ATHAR</b>\n\n"
+        "🔹 <b>الأوامر العامة:</b>\n"
+        "  /start — بدء البوت\n"
+        "  /menu — القائمة الرئيسية\n"
+        "  /prayer — مواقيت الصلاة\n"
+        "  /event — مناسبة اليوم\n"
+        "  /daily — المحتوى اليومي\n"
+        "  /subs — إدارة الاشتراكات\n"
+        "  /city المدينة — تغيير المدينة\n"
+        "  /id — الحصول على معرفك\n"
+        "  /about — معلومات عن البوت\n\n"
+    )
+
+    if is_admin:
+        text += (
+            "🔴 <b>أوامر الأدمن (للأدمن فقط):</b>\n"
+            "  /stats — إحصائيات البوت\n"
+            "  /broadcast النص — بث رسالة للجميع\n"
+            "  /content_status — تقرير صحة المحتوى\n"
+            "  /errors — آخر الأخطاء\n\n"
+        )
+
+    text += (
+        "🎨 الميزات الرئيسية:\n"
+        "• ⭐ نظام مفضلات لحفظ المحتوى\n"
+        "• ⏰ تذكير ما قبل الصلاة بـ 15 دقيقة\n"
+        "• 🛡️ حماية من الإساءة والإغراق\n"
+        "• 📅 تقرير أسبوعي للأدمن\n"
+        "• 🔍 مراقبة صحة المحتوى يومياً"
+    )
+
+    await message.answer(text, parse_mode="HTML")
 
 
 # ═══════════════════════════════════════════════════════════

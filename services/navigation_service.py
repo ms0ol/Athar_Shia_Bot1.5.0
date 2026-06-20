@@ -46,7 +46,7 @@ def ibadat_menu() -> InlineKeyboardMarkup:
         make_button("🤲 دعاء اليوم", "ibadat:dua_today"),
         make_button("📿 تعقيبات الصلاة", "ibadat:taqibat"),
         make_button("✨ ماذا أقرأ الآن؟", "ibadat:what_to_read"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -75,7 +75,7 @@ def library_menu() -> InlineKeyboardMarkup:
         make_button("✨ المناجيات", "library:munajat"),
         make_button("📖 الأحاديث", "library:hadith"),
         make_button("💎 الحكم", "library:wisdom"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -121,7 +121,7 @@ def prayer_menu() -> InlineKeyboardMarkup:
         make_button("📍 الصلاة القادمة", "prayer:next"),
         make_button("📿 التعقيبات", "prayer:taqibat"),
         make_button("🔔 تذكير الصلاة", "prayer:reminder"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -136,7 +136,7 @@ def events_menu() -> InlineKeyboardMarkup:
         make_button("📅 المناسبات القادمة", "event:upcoming"),
         make_button("✨ أعمال المناسبة", "event:works"),
         make_button("📖 التقويم الهجري", "event:calendar"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -152,7 +152,7 @@ def daily_menu() -> InlineKeyboardMarkup:
         make_button("🤲 دعاء اليوم", "daily:dua"),
         make_button("✨ مناجاة اليوم", "daily:munajat"),
         make_button("🎲 محتوى عشوائي", "daily:random"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -167,7 +167,7 @@ def settings_menu() -> InlineKeyboardMarkup:
         make_button("🕌 المدينة", "settings:city"),
         make_button("🕐 المنطقة الزمنية", "settings:timezone"),
         make_button("ℹ️ حول البوت", "settings:about"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
@@ -284,7 +284,7 @@ def favorites_menu() -> InlineKeyboardMarkup:
         make_button("🤲 أدعية محفوظة", "fav:list:daily_dua:0"),
         make_button("✨ مناجيات محفوظة", "fav:list:munajat:0"),
         make_button("🕌 زيارات محفوظة", "fav:list:ziyarat:0"),
-        make_button("🔙 الرئيسية", "menu:main"),
+        make_button("🏠 الرئيسية", "menu:main"),
     )
     return kb
 
