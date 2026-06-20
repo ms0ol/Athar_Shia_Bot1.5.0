@@ -205,23 +205,48 @@ def back_button(target: str) -> InlineKeyboardMarkup:
 
 
 def pagination_buttons(items: list, prefix: str, page: int = 0, per_page: int = 5) -> InlineKeyboardMarkup:
-    """Create pagination buttons for a list of items."""
+    """Create pagination buttons for a list of items.
+    
+    Per-type label priority:
+    - hadith, wisdom: text first (show actual content)
+    - munajat, ziyarat: title first (show title)
+    - dua: title then text
+    """
     kb = InlineKeyboardMarkup(row_width=1)
 
     total_pages = (len(items) + per_page - 1) // per_page
     start = page * per_page
     end = min(start + per_page, len(items))
 
+    text_first_prefixes = ("hadith_lib", "wisdom_lib")
+    title_first_prefixes = ("munajat_lib", "ziyarat_lib")
+
     for item in items[start:end]:
         text_preview = item.get("text", "")
         title = item.get("title") or item.get("author") or ""
-        # Show text first so users see the actual content, not just author/title
-        if text_preview:
-            label = f"{text_preview[:45]}…" if len(text_preview) > 45 else text_preview
-        elif title:
-            label = f"{title[:45]}…" if len(title) > 45 else title
+
+        if prefix in text_first_prefixes:
+            if text_preview:
+                label = f"{text_preview[:45]}…" if len(text_preview) > 45 else text_preview
+            elif title:
+                label = f"{title[:45]}…" if len(title) > 45 else title
+            else:
+                label = item.get("id", "—")
+        elif prefix in title_first_prefixes:
+            if title:
+                label = f"{title[:45]}…" if len(title) > 45 else title
+            elif text_preview:
+                label = f"{text_preview[:45]}…" if len(text_preview) > 45 else text_preview
+            else:
+                label = item.get("id", "—")
         else:
-            label = item.get("id", "—")
+            # dua_lib default: title then text
+            if title:
+                label = f"{title[:45]}…" if len(title) > 45 else title
+            elif text_preview:
+                label = f"{text_preview[:45]}…" if len(text_preview) > 45 else text_preview
+            else:
+                label = item.get("id", "—")
         kb.add(make_button(label, f"{prefix}:item:{item.get('id', '')}"))
 
     # Pagination controls
