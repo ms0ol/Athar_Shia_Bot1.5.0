@@ -230,7 +230,7 @@ async def callback_ibadat_day_works(call: CallbackQuery):
         text += f"🤲 <b>دعاء اليوم:</b> {dua.get('title', '')}\n"
         dua_text = dua.get('text', '')
         if dua_text:
-            text += f"{dua_text[:500]}...\n\n"
+            text += f"{dua_text}\n\n"
         else:
             text += "اضغط على <b>دعاء اليوم</b> في القائمة لتحميل الدعاء كاملاً.\n\n"
 
