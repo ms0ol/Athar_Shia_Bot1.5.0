@@ -133,11 +133,16 @@ def init_database():
 # ─── User Operations ───
 
 def add_user(user_id: int, username: Optional[str], full_name: Optional[str]) -> bool:
-    """Add a new user or update existing one."""
+    """Add a new user or update existing one. Returns True if the user is NEW."""
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
+        # Check if user already exists
+        cursor.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        is_new = row is None
+
         cursor.execute("""
             INSERT INTO users (user_id, username, full_name)
             VALUES (?, ?, ?)
@@ -147,7 +152,7 @@ def add_user(user_id: int, username: Optional[str], full_name: Optional[str]) ->
                 last_active = CURRENT_TIMESTAMP
         """, (user_id, username, full_name))
         conn.commit()
-        return True
+        return is_new
     except sqlite3.Error:
         return False
     finally:

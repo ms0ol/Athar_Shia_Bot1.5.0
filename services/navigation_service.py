@@ -1,6 +1,6 @@
 """
 Athar Shia Bot - Navigation Service
-بوت آثار الشيعة - خدمة التنقل والقوائم
+بوت اثر الشيعة - خدمة التنقل والقوائم
 """
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
