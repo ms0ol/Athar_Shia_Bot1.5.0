@@ -1,2 +1,8 @@
 aiogram>=2.25,<3.0
 hijri-converter>=2.2.0
+aiogram
+hijri-converter
+pytz
+aiogram
+hijri-converter
+pytz
