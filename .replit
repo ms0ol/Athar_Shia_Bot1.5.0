@@ -32,3 +32,8 @@ args = "python app.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[userenv]
+
+[userenv.shared]
+ADMIN_IDS = "8055247329"
