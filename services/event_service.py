@@ -7,6 +7,7 @@ Athar Shia Bot - Event Service
 """
 
 import json
+import re
 from datetime import datetime, timedelta
 from hijri_converter import convert
 import config
@@ -250,9 +251,15 @@ def format_upcoming_events(events: List[Dict]) -> str:
         day    = event.get("_day", 0)
         month_name = get_hijri_month_name(month)
         text_preview = event.get("text", "")
-        # أول سطر من النص كعنوان مختصر
+
+        # 1. استخراج أول سطر
         first_line = text_preview.split("\n")[0].lstrip("* ").strip()
-        title = first_line[:60] + "…" if len(first_line) > 60 else first_line
+
+        # 2. تنظيف السطر من أي وسوم HTML لتجنب كسر التنسيق عند القص
+        clean_line = re.sub(r'<[^>]+>', '', first_line)
+
+        # 3. قص النص الآمن
+        title = clean_line[:60] + "…" if len(clean_line) > 60 else clean_line
 
         result += f"• <b>{day} {month_name}</b> — بعد {days} يوم\n"
         result += f"  <i>{title}</i>\n\n"
