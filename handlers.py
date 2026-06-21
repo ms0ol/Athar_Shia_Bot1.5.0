@@ -25,7 +25,7 @@ from services.prayer_service import (
     format_next_prayer, get_prayer_taqibat, format_taqibat
 )
 from services.event_service import (
-    get_today_event, get_upcoming_events, get_weekly_dua,
+    get_today_event, get_upcoming_events, get_weekly_dua, get_weekly_ziyarat,
     get_today_hijri, format_hijri_date, format_event,
     format_upcoming_events, format_weekly_dua, get_hijri_calendar
 )
@@ -40,6 +40,11 @@ from services.navigation_service import (
     favorites_menu, content_actions_keyboard, make_button,
     admin_settings_menu,
 )
+
+# ─── Tracker for ziyarat PDFs sent in day_works ───
+# {user_id: message_id} – deleted when user navigates away
+_day_works_pdf_msg: dict = {}
+
 
 # ═══════════════════════════════════════════════════════════
 # PDF DUA HELPER

@@ -207,6 +207,15 @@ def get_weekly_dua() -> Optional[Dict[str, Any]]:
     return None
 
 
+def get_weekly_ziyarat() -> Optional[Dict[str, Any]]:
+    weekday = datetime.now().strftime("%A").lower()
+    data    = load_json(DATA_DIR / "event_content" / "weekly_ziyarat.json")
+    for item in data.get("items", []):
+        if item.get("weekday", "").lower() == weekday:
+            return item
+    return None
+
+
 def get_event_by_date(month: int, day: int) -> Optional[Dict[str, Any]]:
     data = load_json(DATA_DIR / "event_content" / "events.json")
     for item in data.get("items", []):

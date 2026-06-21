@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "description": "زيارات أيام الأسبوع",
+    "total": 7,
+    "migrated_at": "2026-06-21T14:22:03.939194"
+  },
+  "items": [
+    {
+      "id": "WZ001",
+      "weekday": "saturday",
+      "title": "زيارة يوم السبت",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBP9qN8hrzKMRFYWZot9KQOb6kCpGiAAC_5sAAhgewEnFF-yTzMtroDwE"
+    },
+    {
+      "id": "WZ002",
+      "weekday": "sunday",
+      "title": "زيارة يوم الاحد",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBP9qN8hrzKMRFYWZot9KQOb6kCpGiAAC_5sAAhgewEnFF-yTzMtroDwE"
+    },
+    {
+      "id": "WZ003",
+      "weekday": "monday",
+      "title": "زيارة يوم الاثنين",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBQJqN8hrv5QtBBViSATpK8ucuo6NDwACA5wAAhgewElJlKwu_B_zSjwE"
+    },
+    {
+      "id": "WZ004",
+      "weekday": "tuesday",
+      "title": "زيارة يوم الثلاثاء",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBQRqN8hrVlT8yt15xNFM4xPEsO8CXwACCJwAAhgewEnK-SqN-gtdaTwE"
+    },
+    {
+      "id": "WZ005",
+      "weekday": "wednesday",
+      "title": "زيارة يوم الاربعاء",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBQFqN8hrSPNnZBh90y59TovbFFokGQACAZwAAhgewElJujbRxZuNLTwE"
+    },
+    {
+      "id": "WZ006",
+      "weekday": "thursday",
+      "title": "زيارة يوم الخميس",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBQVqN8hrFermsEZWdZfktxPmBapOTQACCZwAAhgewEmyKC9D5q2SbzwE"
+    },
+    {
+      "id": "WZ007",
+      "weekday": "friday",
+      "title": "زيارة يوم الجمعة",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAAErBQABajfIa0qJ2KZZ6YROZk4Z2SIOUA4AA5wAAhgewEnwA1_6Ut1i9zwE"
+    }
+  ]
+}
