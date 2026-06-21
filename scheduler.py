@@ -20,6 +20,12 @@ def _now() -> datetime:
     """Return current time in the configured timezone."""
     return datetime.now(pytz.timezone(config.TIMEZONE))
 
+def chunk_users(users_list, chunk_size=30):
+    """تقسيم قائمة المستخدمين إلى مجموعات صغيرة (كل مجموعة 30 مستخدم)"""
+    for i in range(0, len(users_list), chunk_size):
+        yield users_list[i:i + chunk_size]
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,56 +74,61 @@ class BotScheduler:
                 # Get all subscribed users
                 users = db.get_subscribed_users("prayer_reminder")
 
-                for user in users:
-                    try:
-                        times = get_prayer_times(
-                            user.get("latitude", config.LATITUDE),
-                            user.get("longitude", config.LONGITUDE),
-                            user.get("timezone", config.TIMEZONE),
-                            user.get("city", config.CITY)
-                        )
+                # تطبيق فكرتك: تقسيم المستخدمين إلى دفعات (كل دفعة 30 مستخدم)
+                for chunk in chunk_users(users, chunk_size=30):
+                    for user in chunk:
+                        try:
+                            times = get_prayer_times(
+                                user.get("latitude", config.LATITUDE),
+                                user.get("longitude", config.LONGITUDE),
+                                user.get("timezone", config.TIMEZONE),
+                                user.get("city", config.CITY)
+                            )
 
-                        # Check if current time matches any prayer time
-                        for prayer, time_str in times.items():
-                            if prayer in ["sunrise", "midnight"]:
-                                continue
+                            # Check if current time matches any prayer time
+                            for prayer, time_str in times.items():
+                                if prayer in ["sunrise", "midnight"]:
+                                    continue
 
-                            if time_str == current_time:
-                                prayer_names = {
-                                    "fajr": "الفجر 🌅",
-                                    "dhuhr": "الظهر ☀️",
-                                    "asr": "العصر 🌤",
-                                    "maghrib": "المغرب 🌇",
-                                    "isha": "العشاء 🌙"
-                                }
+                                if time_str == current_time:
+                                    prayer_names = {
+                                        "fajr": "الفجر 🌅",
+                                        "dhuhr": "الظهر ☀️",
+                                        "asr": "العصر 🌤",
+                                        "maghrib": "المغرب 🌇",
+                                        "isha": "العشاء 🌙"
+                                    }
 
-                                text = f"""
-🕌 <b>حان وقت صلاة {prayer_names.get(prayer, prayer)}</b>
+                                    text = f"""
+    🕌 <b>حان وقت صلاة {prayer_names.get(prayer, prayer)}</b>
 
-📍 {user.get('city', config.CITY)}
-🕐 {current_time}
+    📍 {user.get('city', config.CITY)}
+    🕐 {current_time}
 
-📿 <b>الأذكار المستحبة:</b>
-• تكبيرة الإحرام
-• سورة الحمد
-• سورة الإخلاص (3 مرات)
-• الصلاة على محمد وآل محمد
-• الدعاء بعد الصلاة
+    📿 <b>الأذكار المستحبة:</b>
+    • تكبيرة الإحرام
+    • سورة الحمد
+    • سورة الإخلاص (3 مرات)
+    • الصلاة على محمد وآل محمد
+    • الدعاء بعد الصلاة
 
-<i>قال الإمام الصادق عليه السلام:
-"مَنْ تَوَضَّأَ وَأَحْسَنَ الوُضُوءَ ثُمَّ صَلَّى رَكْعَتَيْنِ
-أوْ رَكْعَةً أجَارَهُ اللهُ مِنْ نَارِ جَهَنَّمَ يَوْمَ يَقُومُ النَّاسُ لِرَبِّ العَالَمِينَ"</i>
+    <i>قال الإمام الصادق عليه السلام:
+    "مَنْ تَوَضَّأَ وَأَحْسَنَ الوُضُوءَ ثُمَّ صَلَّى رَكْعَتَيْنِ
+    أوْ رَكْعَةً أجَارَهُ اللهُ مِنْ نَارِ جَهَنَّمَ يَوْمَ يَقُومُ النَّاسُ لِرَبِّ العَالَمِينَ"</i>
 
-🤲 تقبل الله صلاتكم
-"""
-                                await self.bot.send_message(
-                                    user["user_id"],
-                                    text,
-                                    parse_mode="HTML"
-                                )
+    🤲 تقبل الله صلاتكم
+    """
+                                    await self.bot.send_message(
+                                        user["user_id"],
+                                        text,
+                                        parse_mode="HTML"
+                                    )
 
-                    except Exception as e:
-                        logger.error(f"Error sending prayer reminder to {user['user_id']}: {e}")
+                        except Exception as e:
+                            logger.error(f"Error sending prayer reminder to {user['user_id']}: {e}")
+
+                    # الانتظار لمدة ثانيتين بعد كل 30 مستخدم كما اقترحت
+                    await asyncio.sleep(2)
 
                 # Check every minute
                 await asyncio.sleep(60)
@@ -127,6 +138,7 @@ class BotScheduler:
             except Exception as e:
                 logger.error(f"Error in prayer reminder loop: {e}")
                 await asyncio.sleep(60)
+
 
     # ─── Daily Content ───
 
@@ -242,26 +254,31 @@ class BotScheduler:
                 # Remind at 9 PM for night adhkar
                 if current_time == "21:00":
                     text = """
-📿 <b>تذكير بالأذكار المسائية</b>
+    📿 <b>تذكير بالأذكار المسائية</b>
 
-• استغفر الله (100 مرة)
-• سبحان الله (100 مرة)
-• الحمد لله (100 مرة)
-• الله أكبر (100 مرة)
-• الصلاة على محمد وآل محمد (100 مرة)
-• لا حول ولا قوة إلا بالله (100 مرة)
+    • استغفر الله (100 مرة)
+    • سبحان الله (100 مرة)
+    • الحمد لله (100 مرة)
+    • الله أكبر (100 مرة)
+    • الصلاة على محمد وآل محمد (100 مرة)
+    • لا حول ولا قوة إلا بالله (100 مرة)
 
-<i>قال الإمام الصادق عليه السلام:
-"مَنْ أَكْثَرَ اسْتِغْفَارَهُ فِي شَعْبَانَ أَخْرَجَهُ اللهُ مِنْ قَبْرِهِ
-وَوُجُوهُهُ كَالْقَمَرِ فِي لَيْلَةِ الْبَدْرِ"</i>
-"""
+    <i>قال الإمام الصادق عليه السلام:
+    "مَنْ أَكْثَرَ اسْتِغْفَارَهُ فِي شَعْبَانَ أَخْرَجَهُ اللهُ مِنْ قَبْرِهِ
+    وَوُجُوهُهُ كَالْقَمَرِ فِي لَيْلَةِ الْبَدْرِ"</i>
+    """
                     # Send to all users
                     users = db.get_all_users()
-                    for user in users:
-                        try:
-                            await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
-                        except Exception as e:
-                            logger.error(f"Error sending tasbih reminder: {e}")
+
+                    # تطبيق فكرتك: تقسيم الإرسال إلى مجموعات بانتظار ثانيتين
+                    for chunk in chunk_users(users, chunk_size=30):
+                        for user in chunk:
+                            try:
+                                await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
+                            except Exception as e:
+                                logger.error(f"Error sending tasbih reminder: {e}")
+
+                        await asyncio.sleep(2) # انتظار ثانيتين
 
                     await asyncio.sleep(120)
 
@@ -437,12 +454,16 @@ class BotScheduler:
         sent = 0
         failed = 0
 
-        for user in users:
-            try:
-                await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
-                sent += 1
-            except Exception as e:
-                logger.error(f"Broadcast failed for {user['user_id']}: {e}")
-                failed += 1
+        # تطبيق فكرتك لحماية البوت أثناء الإرسال اليدوي الجماعي
+        for chunk in chunk_users(users, chunk_size=30):
+            for user in chunk:
+                try:
+                    await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
+                    sent += 1
+                except Exception as e:
+                    logger.error(f"Broadcast failed for {user['user_id']}: {e}")
+                    failed += 1
+
+            await asyncio.sleep(2) # انتظار ثانيتين قبل الانتقال لـ 30 مستخدم آخرين
 
         return sent, failed
