@@ -66,3 +66,6 @@ ABOUT_MESSAGE = """
 # ─── Hijri Calendar Adjustment ───
 # إذا كان البوت متقدم بيوم ضع -1، وإذا كان متأخر بيوم ضع 1، وإذا كان مطابق ضع 0
 HIJRI_OFFSET = int(os.getenv("HIJRI_OFFSET", "-1"))
+
+# ─── Admin Notifications ───
+NEW_USER_NOTIFICATIONS = os.getenv("NEW_USER_NOTIFICATIONS", "true").lower() == "true"

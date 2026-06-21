@@ -38,6 +38,7 @@ from services.navigation_service import (
     prayer_menu, events_menu, daily_menu, settings_menu,
     subscriptions_settings_menu, back_button, pagination_buttons,
     favorites_menu, content_actions_keyboard, make_button,
+    admin_settings_menu,
 )
 
 # ═══════════════════════════════════════════════════════════
@@ -82,8 +83,25 @@ async def cmd_start(message: Message):
     username = message.from_user.username
     full_name = message.from_user.full_name
 
-    # Register user
-    db.add_user(user_id, username, full_name)
+    # Register user — returns True if new
+    is_new = db.add_user(user_id, username, full_name)
+
+    # Notify admin about new user (if enabled via DB toggle)
+    if is_new and db.get_state("new_user_notifications", "true") == "true":
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        notif_text = (
+            f"🔔 <b>مستخدم جديد انضم للبوت!</b>\n\n"
+            f"👤 الاسم: {full_name}\n"
+            f"🆔 ID: <code>{user_id}</code>\n"
+            f"👀 المعرف: @{username or '—'}\n"
+            f"🕐 الوقت: {now}\n"
+        )
+        for admin_id in config.ADMIN_IDS:
+            try:
+                await message.bot.send_message(admin_id, notif_text, parse_mode="HTML")
+            except Exception:
+                pass
 
     await message.answer(
         config.WELCOME_MESSAGE,
@@ -150,6 +168,7 @@ async def cmd_about(message: Message):
     if is_admin:
         text += (
             "🔴 <b>أوامر الأدمن (للأدمن فقط):</b>\n"
+            "  /admin — لوحة الإدارة\n"
             "  /stats — إحصائيات البوت\n"
             "  /broadcast النص — بث رسالة للجميع\n"
             "  /content_status — تقرير صحة المحتوى\n"
@@ -1213,6 +1232,43 @@ def _is_admin(user_id: int) -> bool:
     return user_id in config.ADMIN_IDS
 
 
+async def cmd_admin(message: Message):
+    """Admin: open admin settings panel."""
+    if not _is_admin(message.from_user.id):
+        return
+
+    status = db.get_state("new_user_notifications", "true")
+    status_text = "✅ مفعل" if status == "true" else "❌ معطل"
+    text = (
+        f"🔴 <b>لوحة إدارة الأدمن</b>\n\n"
+        f"📊 عدد المستخدمين: {db.get_user_count()}\n"
+        f"🔔 تنبيه الأعضاء الجدد: {status_text}\n\n"
+        f"اختر من القائمة أدناه:"
+    )
+    await message.answer(text, reply_markup=admin_settings_menu(), parse_mode="HTML")
+
+
+async def callback_admin_toggle_new_user(call: CallbackQuery):
+    """Toggle new-user notification ON/OFF."""
+    if not _is_admin(call.from_user.id):
+        await call.answer()
+        return
+
+    current = db.get_state("new_user_notifications", "true")
+    new_state = "false" if current == "true" else "true"
+    db.set_state("new_user_notifications", new_state)
+
+    status_text = "✅ مفعل" if new_state == "true" else "❌ معطل"
+    text = (
+        f"🔴 <b>لوحة إدارة الأدمن</b>\n\n"
+        f"📊 عدد المستخدمين: {db.get_user_count()}\n"
+        f"🔔 تنبيه الأعضاء الجدد: {status_text}\n\n"
+        f"اختر من القائمة أدناه:"
+    )
+    await call.message.edit_text(text, reply_markup=admin_settings_menu(), parse_mode="HTML")
+    await call.answer(f"تم: {status_text}")
+
+
 async def cmd_stats(message: Message):
     """Admin: display bot statistics."""
     if not _is_admin(message.from_user.id):
@@ -1435,10 +1491,14 @@ def register_handlers(dp: Dispatcher):
     dp.register_callback_query_handler(callback_fav_toggle, lambda c: c.data.startswith(("fav:add:", "fav:rm:")))
 
     # ─── Admin Commands ───
+    dp.register_message_handler(cmd_admin, commands=["admin"])
     dp.register_message_handler(cmd_stats, commands=["stats"])
     dp.register_message_handler(cmd_broadcast, commands=["broadcast"])
     dp.register_message_handler(cmd_content_status, commands=["content_status"])
     dp.register_message_handler(cmd_errors, commands=["errors"])
+
+    # ─── Admin Callbacks ───
+    dp.register_callback_query_handler(callback_admin_toggle_new_user, lambda c: c.data == "admin:toggle_new_user")
 
     # ─── User ID Helper ───
     dp.register_message_handler(cmd_id, commands=["id", "myid"])

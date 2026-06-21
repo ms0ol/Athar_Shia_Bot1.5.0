@@ -273,6 +273,18 @@ def share_button(content_type: str, content_id: str) -> InlineKeyboardMarkup:
     return kb
 
 
+# ─── Admin Settings Menu ───
+
+def admin_settings_menu() -> InlineKeyboardMarkup:
+    """Build admin settings panel keyboard."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        make_button("🔔 تشغيل/إيقاف تنبيه الأعضاء الجدد", "admin:toggle_new_user"),
+        make_button("🏠 الرئيسية", "menu:main"),
+    )
+    return kb
+
+
 # ─── Favorites Menu ───
 
 def favorites_menu() -> InlineKeyboardMarkup:

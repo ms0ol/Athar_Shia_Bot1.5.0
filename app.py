@@ -74,6 +74,7 @@ async def on_startup(dispatcher):
 
     # Set admin-only commands for each admin
     admin_commands = base_commands + [
+        types.BotCommand("admin", "لوحة إدارة الأدمن"),
         types.BotCommand("stats", "إحصائيات البوت (أدمن)"),
         types.BotCommand("broadcast", "بث رسالة (أدمن)"),
         types.BotCommand("content_status", "صحة المحتوى (أدمن)"),
