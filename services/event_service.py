@@ -207,57 +207,14 @@ def get_weekly_dua() -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_weekly_ziyarat():
-    """جلب زيارة اليوم الحالي من ملف زيارات الأسبوع المستقل بشكل آمن."""
-    import json
-    from datetime import datetime
-    import pytz
-    import config
-    import logging
-
-    try:
-        # تحديد اليوم الحالي بالإنجليزية وبحروف صغيرة
-        now = datetime.now(pytz.timezone(config.TIMEZONE))
-        current_weekday = now.strftime("%A").lower()
-
-        # استخدام مسار DATA_DIR المعرف أعلى الملف بشكل تلقائي
-        filepath = DATA_DIR / "event_content" / "weekly_ziyarat.json"
-
-        if not filepath.exists():
-            logging.error(f"الملف غير موجود في المسار: {filepath}")
-            return None
-
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
-
-        for item in data.get("items", []):
-            if item.get("weekday") == current_weekday:
-                return item
-
-    except Exception as e:
-        logging.error(f"Error in get_weekly_ziyarat: {e}")
-    return None
-
-def get_all_ziyarat(category: str = "general") -> list:
-    """جلب قائمة الزيارات بناءً على التصنيف من ملف المكتبة"""
-    data = load_json(DATA_DIR / "library" / "ziyarat.json")
-    return [item for item in data.get("items", []) if item.get("category") == category] or data.get("items", [])
-
-def get_ziyarat_by_id(ziyarat_id: str) -> Optional[Dict[str, Any]]:
-    """البحث عن زيارة معينة بواسطة الـ ID داخل ملف المكتبة وملف الأسبوع"""
-    # البحث أولاً في زيارات المكتبة العامة
-    data = load_json(DATA_DIR / "library" / "ziyarat.json")
+def get_weekly_ziyarat() -> Optional[Dict[str, Any]]:
+    weekday = datetime.now().strftime("%A").lower()
+    data    = load_json(DATA_DIR / "event_content" / "weekly_ziyarat.json")
     for item in data.get("items", []):
-        if item.get("id") == ziyarat_id:
-            return item
-
-    # البحث في زيارات أيام الأسبوع كخيار بديل آمن
-    weekly_data = load_json(DATA_DIR / "event_content" / "weekly_ziyarat.json")
-    for item in weekly_data.get("items", []):
-        if item.get("id") == ziyarat_id:
+        if item.get("weekday", "").lower() == weekday:
             return item
     return None
-    
+
 
 def get_event_by_date(month: int, day: int) -> Optional[Dict[str, Any]]:
     data = load_json(DATA_DIR / "event_content" / "events.json")
@@ -351,5 +308,3 @@ def get_hijri_calendar(year: Optional[int] = None) -> str:
         result += f"{emoji} {m}. {name}\n"
     result += f"\n📅 اليوم: {format_hijri_date(hijri)}"
     return result
-
-

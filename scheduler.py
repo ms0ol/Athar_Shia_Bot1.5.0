@@ -1,6 +1,6 @@
 """
 Athar Shia Bot - Scheduler
-بوت آثار الشيعة - النظام الزمني
+بوت أثر الشيعة - النظام الزمني
 """
 
 import asyncio
