@@ -302,7 +302,7 @@ def get_prayer_taqibat(prayer: str) -> Dict:
 
 def format_taqibat(data: Dict, prayer_name: str) -> str:
     """Format taqibat content for display."""
-    TELEGRAM_LIMIT = 3900
+    TELEGRAM_LIMIT = 4500
     result = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n\n"
 
     # New format: data contains an "items" list
@@ -360,3 +360,21 @@ def format_taqibat(data: Dict, prayer_name: str) -> str:
         result += "سيتم إضافة المحتوى قريباً إن شاء الله."
 
     return result
+
+def format_taqibat_page(items_chunk: list, prayer_name: str, page: int, total_pages: int) -> str:
+    """تنسيق صفحة التعقيبات بشكل كامل وبدون قص للنصوص"""
+    msg = f"📿 <b>تعقيبات صلاة {prayer_name}</b>\n"
+    msg += f"📄 الصفحة ({page + 1} من {total_pages})\n"
+    msg += "───────────────────\n\n"
+
+    for idx, item in enumerate(items_chunk, start=(page * 5) + 1):
+        title = item.get("title", "تعقيب")
+        text = item.get("text", "")
+
+        if title:
+            msg += f"✨ <b>{idx}. {title}</b>\n"
+        if text:
+            # استخدام الاقتباس لترتيب شكل التعقيب
+            msg += f"<blockquote>{text}</blockquote>\n\n"
+
+    return msg

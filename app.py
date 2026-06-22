@@ -1,6 +1,6 @@
 """
 Athar Shia Bot - Main Entry Point
-بوت آثار الشيعة - نقطة التشغيل الرئيسية
+بوت أثر الشيعة - نقطة التشغيل الرئيسية
 
 To run:
     python app.py

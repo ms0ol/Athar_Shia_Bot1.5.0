@@ -395,21 +395,63 @@ prayer_names = {
 
 
 async def callback_taqibat(call: CallbackQuery):
-    """Handle taqibat for specific prayer."""
+    """Handle taqibat for specific prayer (First Page)."""
     prayer = call.data.split(":")[1]
     data = get_prayer_taqibat(prayer)
 
-    if data:
-        text = format_taqibat(data, prayer_names.get(prayer, prayer))
+    if data and "items" in data:
+        items = data["items"]
+        per_page = 5
+        total_pages = max(1, (len(items) + per_page - 1) // per_page)
+
+        # أخذ أول 5 تعقيبات فقط
+        chunk = items[0:per_page]
+
+        from services.prayer_service import format_taqibat_page
+        from services.navigation_service import taqibat_pagination_keyboard
+
+        text = format_taqibat_page(chunk, prayer_names.get(prayer, prayer), 0, total_pages)
+        kb = taqibat_pagination_keyboard(prayer, 0, total_pages)
     else:
-        text = f"📿 <b>تعقيبات صلاة {prayer_names.get(prayer, prayer)}</b>\n\n"
-        text += "سيتم إضافة المحتوى قريباً إن شاء الله."
+        text = f"📿 <b>تعقيبات صلاة {prayer_names.get(prayer, prayer)}</b>\n\nسيتم إضافة المحتوى قريباً إن شاء الله."
+        kb = back_button("menu:ibadat")
 
     try:
-        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
-        # If edit fails (e.g. message too long after all), send a new message
-        await call.message.answer(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+        await call.message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await call.answer()
+
+
+async def callback_taqibat_page(call: CallbackQuery):
+    """Handle paginated taqibat (Next/Prev Pages)."""
+    parts = call.data.split(":")
+    prayer = parts[1]
+    page = int(parts[2])
+
+    data = get_prayer_taqibat(prayer)
+    if not data or "items" not in data:
+        await call.answer("⚠️ حدث خطأ أو لا توجد تعقيبات.", show_alert=True)
+        return
+
+    items = data["items"]
+    per_page = 5
+    total_pages = max(1, (len(items) + per_page - 1) // per_page)
+
+    # لتجنب الخروج عن نطاق الصفحات
+    page = max(0, min(page, total_pages - 1))
+
+    start_idx = page * per_page
+    end_idx = start_idx + per_page
+    chunk = items[start_idx:end_idx]
+
+    from services.prayer_service import format_taqibat_page
+    from services.navigation_service import taqibat_pagination_keyboard
+
+    text = format_taqibat_page(chunk, prayer_names.get(prayer, prayer), page, total_pages)
+    kb = taqibat_pagination_keyboard(prayer, page, total_pages)
+
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await call.answer()
 
 
@@ -1447,6 +1489,7 @@ def register_handlers(dp: Dispatcher):
 
     # ─── Taqibat Callbacks ───
     dp.register_callback_query_handler(callback_taqibat, lambda c: c.data.startswith("taqibat:"))
+    dp.register_callback_query_handler(callback_taqibat_page, lambda c: c.data.startswith("taqibat_page:"))
 
     # ─── Library Callbacks ───
     dp.register_callback_query_handler(callback_library_duas, lambda c: c.data == "library:duas")

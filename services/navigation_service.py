@@ -194,6 +194,25 @@ def subscriptions_settings_menu(user_subs: dict) -> InlineKeyboardMarkup:
     kb.add(make_button("🔙 الإعدادات", "menu:settings"))
     return kb
 
+def taqibat_pagination_keyboard(prayer_type: str, page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """بناء أزرار التنقل لصفحات التعقيبات"""
+    kb = InlineKeyboardMarkup(row_width=2)
+    nav_row = []
+
+    if page > 0:
+        nav_row.append(make_button("◀️ السابقة", f"taqibat_page:{prayer_type}:{page - 1}"))
+    if page < total_pages - 1:
+        nav_row.append(make_button("التالية ▶️", f"taqibat_page:{prayer_type}:{page + 1}"))
+
+    if nav_row:
+        kb.row(*nav_row)
+
+    # أزرار الرجوع والقائمة الرئيسية بنفس السطر
+    kb.row(
+        make_button("🔙 رجوع", "ibadat:taqibat"),
+        make_button("🏠 الرئيسية", "menu:main")
+    )
+    return kb
 
 # ─── Back Buttons ───
 
