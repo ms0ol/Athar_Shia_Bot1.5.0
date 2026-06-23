@@ -445,9 +445,8 @@ async def callback_ibadat_ziyarat_today(call: CallbackQuery):
             existing.append(ziyarat_msg.message_id)
             _day_works_pdf_msg[user_id] = existing
             await call.answer("تم إرسال ملف الزيارة ✅")
-            except json.JSONDecodeError as e:
-            print(f"JSON Error in {filepath.name}: {e}") # لطباعة الخطأ
-            return {"items": []}
+        except (WrongFileIdentifier, BadRequest) as e:
+            logging.error(f"[ZIYARAT TODAY] {e}")
             await call.answer("⚠️ ملف الزيارة غير متاح حالياً.", show_alert=True)
     elif ziyarat.get("text"):
         from services.event_service import format_weekly_dua
@@ -456,6 +455,7 @@ async def callback_ibadat_ziyarat_today(call: CallbackQuery):
         await call.answer()
     else:
         await call.answer("⚠️ لا يوجد محتوى للزيارة.", show_alert=True)
+
 
 
 async def callback_ibadat_taqibat(call: CallbackQuery):
