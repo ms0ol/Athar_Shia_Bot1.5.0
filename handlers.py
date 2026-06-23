@@ -424,6 +424,39 @@ async def callback_ibadat_dua_today(call: CallbackQuery):
         await call.answer("⚠️ خطأ في بيانات الدعاء.", show_alert=True)
 
 
+async def callback_ibadat_ziyarat_today(call: CallbackQuery):
+    """Handle today's ziyarat – sends the weekly ziyarat PDF for this weekday."""
+    ziyarat = get_weekly_ziyarat()
+
+    if not ziyarat:
+        await call.answer("🕌 لا توجد زيارة مخصصة لهذا اليوم حالياً.", show_alert=True)
+        return
+
+    if ziyarat.get("is_pdf") and ziyarat.get("file_id"):
+        user_id = call.from_user.id
+        try:
+            ziyarat_msg = await call.message.answer_document(
+                document=ziyarat["file_id"],
+                caption=f"🕌 <b>{ziyarat.get('title', 'زيارة اليوم')}</b>\n\nنسألكم الدعاء 🤲",
+                parse_mode="HTML"
+            )
+            # تتبع الرسالة للحذف عند التنقل
+            existing = _day_works_pdf_msg.get(user_id, [])
+            existing.append(ziyarat_msg.message_id)
+            _day_works_pdf_msg[user_id] = existing
+            await call.answer("تم إرسال ملف الزيارة ✅")
+        except (WrongFileIdentifier, BadRequest) as e:
+            logging.error(f"[ZIYARAT TODAY] {e}")
+            await call.answer("⚠️ ملف الزيارة غير متاح حالياً.", show_alert=True)
+    elif ziyarat.get("text"):
+        from services.event_service import format_weekly_dua
+        text = f"🕌 <b>{ziyarat.get('title', 'زيارة اليوم')}</b>\n\n{ziyarat['text']}"
+        await call.message.edit_text(text[:4000], parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+        await call.answer()
+    else:
+        await call.answer("⚠️ لا يوجد محتوى للزيارة.", show_alert=True)
+
+
 async def callback_ibadat_taqibat(call: CallbackQuery):
     """Handle taqibat submenu."""
     await call.message.edit_text(
@@ -1578,6 +1611,7 @@ def register_handlers(dp: Dispatcher):
     dp.register_callback_query_handler(callback_ibadat_day_works, lambda c: c.data == "ibadat:day_works")
     dp.register_callback_query_handler(callback_ibadat_night_works, lambda c: c.data == "ibadat:night_works")
     dp.register_callback_query_handler(callback_ibadat_dua_today, lambda c: c.data == "ibadat:dua_today")
+    dp.register_callback_query_handler(callback_ibadat_ziyarat_today, lambda c: c.data == "ibadat:ziyarat_today")
     dp.register_callback_query_handler(callback_ibadat_taqibat, lambda c: c.data == "ibadat:taqibat")
     dp.register_callback_query_handler(callback_ibadat_what_to_read, lambda c: c.data == "ibadat:what_to_read")
 

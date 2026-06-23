@@ -44,7 +44,7 @@ def ibadat_menu() -> InlineKeyboardMarkup:
         make_button("📅 أعمال اليوم", "ibadat:day_works"),
         make_button("🌙 أعمال الليلة", "ibadat:night_works"),
         make_button("🤲 دعاء اليوم", "ibadat:dua_today"),
-        make_button("📿 تعقيبات الصلاة", "ibadat:taqibat"),
+        make_button("🕌 زيارة اليوم", "ibadat:ziyarat_today"),
         make_button("✨ ماذا أقرأ الآن؟", "ibadat:what_to_read"),
         make_button("🏠 الرئيسية", "menu:main"),
     )
