@@ -41,13 +41,13 @@ from services.navigation_service import (
     admin_settings_menu,
 )
 
-# ─── Tracker for ziyarat PDFs sent in day_works ───
-# {user_id: message_id} – deleted when user navigates away
+# ─── Tracker for PDFs sent in day_works ───
+# {user_id: [message_id, ...]} – deleted when user navigates away
 _day_works_pdf_msg: dict = {}
 
 
 # ═══════════════════════════════════════════════════════════
-# PDF DUA HELPER
+# PDF HELPERS
 # ═══════════════════════════════════════════════════════════
 
 async def _send_dua_pdf(call: CallbackQuery, item: dict) -> bool:
@@ -77,6 +77,43 @@ async def _send_dua_pdf(call: CallbackQuery, item: dict) -> bool:
             show_alert=True
         )
         return False
+
+
+async def _send_ziyarat_pdf(call: CallbackQuery, item: dict) -> bool:
+    """
+    Send a PDF ziyarat document. Returns True on success, False on failure.
+    """
+    ziyarat_id = item.get("id", "")
+    title = item.get("title", "زيارة")
+    caption = f"🕌 <b>{title}</b>\n\nنسألكم الدعاء 🤲"
+
+    file_id = item.get("file_id")
+    if not file_id:
+        await call.answer(f"⚠️ ملف '{title}' غير متاح حالياً.", show_alert=True)
+        return False
+
+    try:
+        msg = await call.message.answer_document(
+            document=file_id,
+            caption=caption,
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الزيارة ✅")
+        return msg
+    except (WrongFileIdentifier, BadRequest) as e:
+        logging.error(f"[ZIYARAT PDF] فشل إرسال {ziyarat_id} ({title}): {e}")
+        await call.answer(f"⚠️ ملف '{title}' غير متاح حالياً.", show_alert=True)
+        return False
+
+
+async def _cleanup_day_works_pdfs(user_id: int, bot) -> None:
+    """Delete any PDF messages tracked for this user from day_works."""
+    msg_ids = _day_works_pdf_msg.pop(user_id, [])
+    for mid in msg_ids:
+        try:
+            await bot.delete_message(chat_id=user_id, message_id=mid)
+        except Exception:
+            pass
 
 
 # ═══════════════════════════════════════════════════════════
@@ -198,6 +235,7 @@ async def cmd_about(message: Message):
 
 async def callback_main_menu(call: CallbackQuery):
     """Handle main menu callback."""
+    await _cleanup_day_works_pdfs(call.from_user.id, call.bot)
     await call.message.edit_text(
         "🏠 <b>القائمة الرئيسية</b>\n\nاختر من القائمة:",
         reply_markup=main_menu(),
@@ -208,6 +246,7 @@ async def callback_main_menu(call: CallbackQuery):
 
 async def callback_ibadat(call: CallbackQuery):
     """Handle ibadat menu."""
+    await _cleanup_day_works_pdfs(call.from_user.id, call.bot)
     await call.message.edit_text(
         "📿 <b>العبادات اليومية</b>\n\nاختر ما تريد:",
         reply_markup=ibadat_menu(),
@@ -272,8 +311,10 @@ async def callback_settings(call: CallbackQuery):
 
 async def callback_ibadat_day_works(call: CallbackQuery):
     """Handle day works."""
+    user_id = call.from_user.id
     hijri = get_today_hijri()
     dua = get_weekly_dua()
+    ziyarat = get_weekly_ziyarat()
 
     text = f"📅 <b>أعمال اليوم</b>\n"
     text += f"📆 {format_hijri_date(hijri)}\n\n"
@@ -290,11 +331,49 @@ async def callback_ibadat_day_works(call: CallbackQuery):
         if dua_text:
             text += f"{dua_text}\n\n"
         else:
-            text += "اضغط على <b>دعاء اليوم</b> في القائمة لتحميل الدعاء كاملاً.\n\n"
+            text += "سيتم إرسال ملف الدعاء أدناه 👇\n\n"
+
+    if ziyarat:
+        text += f"🕌 <b>زيارة اليوم:</b> {ziyarat.get('title', '')}\n"
+        ziyarat_text = ziyarat.get('text', '')
+        if ziyarat_text:
+            text += f"{ziyarat_text}\n\n"
+        else:
+            text += "سيتم إرسال ملف الزيارة أدناه 👇\n\n"
 
     text += "📿 تذكر: الصلاة على محمد وآل محمد في كل أحوالك 🌹"
 
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:ibadat"))
+
+    # — إرسال ملفات PDF وتتبع رسائلها للحذف لاحقاً —
+    tracked_ids = []
+
+    if dua and dua.get("is_pdf") and dua.get("file_id"):
+        dua_file_id = db.get_dua_file_id(dua.get("id", "")) or dua.get("file_id")
+        try:
+            dua_msg = await call.message.answer_document(
+                document=dua_file_id,
+                caption=f"📿 <b>{dua.get('title', 'دعاء اليوم')}</b>\n\nنسألكم الدعاء 🤲",
+                parse_mode="HTML"
+            )
+            tracked_ids.append(dua_msg.message_id)
+        except Exception as e:
+            logging.error(f"[DAY_WORKS DUA PDF] {e}")
+
+    if ziyarat and ziyarat.get("is_pdf") and ziyarat.get("file_id"):
+        try:
+            ziyarat_msg = await call.message.answer_document(
+                document=ziyarat.get("file_id"),
+                caption=f"🕌 <b>{ziyarat.get('title', 'زيارة اليوم')}</b>\n\nنسألكم الدعاء 🤲",
+                parse_mode="HTML"
+            )
+            tracked_ids.append(ziyarat_msg.message_id)
+        except Exception as e:
+            logging.error(f"[DAY_WORKS ZIYARAT PDF] {e}")
+
+    if tracked_ids:
+        _day_works_pdf_msg[user_id] = tracked_ids
+
     await call.answer()
 
 
@@ -574,16 +653,31 @@ async def callback_random_dua(call: CallbackQuery):
 
 
 async def callback_random_ziyarat(call: CallbackQuery):
-    """Handle random ziyarat."""
-    item = get_random_item("ziyarat", call.from_user.id)
-    if item:
-        db.mark_content_sent(call.from_user.id, "ziyarat", item["id"])
-        text = format_ziyarat(item)
-    else:
-        text = "🕌 لا يوجد محتوى متوفر حالياً."
+    """Handle random ziyarat supporting both text and PDF formats."""
+    user_id = call.from_user.id
+    item = get_random_item("ziyarat", user_id)
 
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:library"))
-    await call.answer()
+    if not item:
+        await call.answer("🕌 عذراً، لم يتم العثور على زيارة حالياً.", show_alert=True)
+        return
+
+    db.mark_content_sent(user_id, "ziyarat", item["id"])
+
+    if item.get("is_pdf") and item.get("file_id"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer_document(
+            document=item["file_id"],
+            caption=f"🕌 <b>{item.get('title', 'زيارة')}</b>\n\nنسألكم الدعاء 🤲",
+            parse_mode="HTML"
+        )
+        await call.answer("تم إرسال ملف الزيارة ✅")
+    else:
+        text = format_ziyarat(item) if item.get("text") else "🕌 لا يوجد محتوى متوفر حالياً."
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:library"))
+        await call.answer()
 
 
 async def callback_random_munajat(call: CallbackQuery):
