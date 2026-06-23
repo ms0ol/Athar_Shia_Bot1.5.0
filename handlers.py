@@ -120,15 +120,15 @@ async def _cleanup_day_works_pdfs(user_id: int, bot) -> None:
 # COMMAND HANDLERS
 # ═══════════════════════════════════════════════════════════
 async def cmd_start(message: Message):
-    """Handle /start command."""
+    """Handle /start command with support for deep linking."""
     user_id = message.from_user.id
     username = message.from_user.username
     full_name = message.from_user.full_name
 
-    # Register user — returns True if new
+    # تسجيل المستخدم إذا كان جديداً
     is_new = db.add_user(user_id, username, full_name)
 
-    # Notify admin about new user (if enabled via DB toggle)
+    # إشعار الإدارة بالمستخدم الجديد
     if is_new and db.get_state("new_user_notifications", "true") == "true":
         from datetime import datetime
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -145,11 +145,76 @@ async def cmd_start(message: Message):
             except Exception:
                 pass
 
+    # 🌟 فحص روابط الوصول السريع التلقائية 🌟
+    start_args = message.get_args()
+    if start_args:
+        # 1. إذا كان الرابط خاصاً بالتعقيبات المحدثة
+        if start_args == "show_feedback":
+            await message.answer(
+                "📿 <b>تعقيبات الصلاة</b>\n\n"
+                "تم تحديث قسم التعقيبات بنجاح! اختر الصلاة لعرض تعقيباتها والتحسينات الجديدة:",
+                reply_markup=taqibat_menu(),
+                parse_mode="HTML"
+            )
+            return
+
+        # 2. ميزة زيارة اليوم
+        elif start_args == "ziyarat_today":
+            ziyarat = get_weekly_ziyarat()
+
+            # إذا لم تكن هناك زيارة مخصصة لليوم
+            if not ziyarat:
+                await message.answer("🕌 لا توجد زيارة مخصصة لهذا اليوم حالياً.")
+                return
+
+            # إذا كانت الزيارة عبارة عن ملف PDF
+            if ziyarat.get("is_pdf") and ziyarat.get("file_id"):
+                try:
+                    ziyarat_msg = await message.answer_document(
+                        document=ziyarat["file_id"],
+                        caption=f"🕌 <b>{ziyarat.get('title', 'زيارة اليوم')}</b>\n\nنسألكم الدعاء 🤲",
+                        parse_mode="HTML"
+                    )
+                    # تتبع الرسالة للحذف
+                    from handlers import _day_works_pdf_msg
+                    existing = _day_works_pdf_msg.get(user_id, [])
+                    existing.append(ziyarat_msg.message_id)
+                    _day_works_pdf_msg[user_id] = existing
+                except Exception as e:
+                    logging.error(f"[ZIYARAT TODAY DEEP LINK] {e}")
+                    await message.answer("⚠️ ملف الزيارة غير متاح حالياً.")
+
+            # إذا كانت الزيارة عبارة عن نص عادي
+            elif ziyarat.get("text"):
+                text = f"🕌 <b>{ziyarat.get('title', 'زيارة اليوم')}</b>\n\n{ziyarat['text']}"
+                await message.answer(
+                    text[:4000], 
+                    parse_mode="HTML", 
+                    reply_markup=back_button("menu:ibadat")
+                )
+            else:
+                await message.answer("⚠️ لا يوجد محتوى للزيارة.")
+            return
+
+        # 3. ميزة العبادات اليومية المضافة حديثاً (تم إصلاح القوس هنا)
+        elif start_args == "ibadat":
+            await message.answer(
+                "العبادات اليومية 🌺",
+                reply_markup=ibadat_menu(),
+                parse_mode="HTML"
+            )
+            return
+        
+
+    # إذا دخل المستخدم بشكل اعتيادي دون زر وصول سريع
     await message.answer(
         config.WELCOME_MESSAGE,
         reply_markup=main_menu(),
         parse_mode="HTML"
     )
+
+
+
 
 
 async def cmd_menu(message: Message):
@@ -1472,18 +1537,42 @@ async def cmd_stats(message: Message):
 
 
 async def cmd_broadcast(message: Message):
-    """Admin: broadcast a message to all users."""
-    if not _is_admin(message.from_user.id):
+    """Admin: broadcast a message with an optional deep linking button."""
+    # فحص إذا كان المستخدم أدمن
+    if message.from_user.id not in config.ADMIN_IDS:
         return
 
-    text = message.get_args()
-    if not text:
+    args = message.get_args()
+    if not args:
         await message.answer(
             "📢 <b>بث رسالة لجميع المستخدمين:</b>\n"
-            "<code>/broadcast نص الرسالة</code>",
+            "<code>/broadcast نص الرسالة</code>\n\n"
+            "💡 <b>لإضافة زر وصول سريع لميزة جديدة:</b>\n"
+            "<code>/broadcast نص الرسالة | اسم الزر | المعرف</code>\n\n"
+            "<b>مثال للتعقيبات:</b>\n"
+            "<code>/broadcast أضفنا تحسينات جديدة لقسم التعقيبات! | 📿 عرض التعقيبات | show_feedback</code>",
             parse_mode="HTML"
         )
         return
+
+    text_to_send = args
+    reply_markup = None
+
+    # إذا كان النص يحتوي على علامة الفاصل "|" فسنقوم بصنع الزر الشفاف تلقائياً
+    if "|" in args:
+        parts = args.split("|")
+        if len(parts) >= 3:
+            text_to_send = parts[0].strip()
+            btn_text = parts[1].strip()
+            feature_target = parts[2].strip()
+
+            # الحصول على اسم مستخدم البوت لبناء الرابط العميق
+            bot_user = await message.bot.get_me()
+            deep_link_url = f"https://t.me/{bot_user.username}?start={feature_target}"
+
+            # إنشاء الزر
+            reply_markup = InlineKeyboardMarkup()
+            reply_markup.add(InlineKeyboardButton(text=btn_text, url=deep_link_url))
 
     users = db.get_all_users()
     await message.answer(f"📢 جاري الإرسال إلى {len(users)} مستخدم…")
@@ -1491,7 +1580,12 @@ async def cmd_broadcast(message: Message):
     sent = failed = 0
     for user in users:
         try:
-            await message.bot.send_message(user["user_id"], text, parse_mode="HTML")
+            await message.bot.send_message(
+                user["user_id"], 
+                text_to_send, 
+                parse_mode="HTML", 
+                reply_markup=reply_markup
+            )
             sent += 1
             await asyncio.sleep(0.05)
         except Exception:
@@ -1501,6 +1595,8 @@ async def cmd_broadcast(message: Message):
         f"✅ <b>اكتمل البث</b>\n\n• تم الإرسال: {sent}\n• فشل: {failed}",
         parse_mode="HTML"
     )
+
+
 
 
 async def cmd_content_status(message: Message):
