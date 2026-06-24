@@ -800,14 +800,14 @@ async def send_prayer_times(message_or_call):
     """Send prayer times."""
     user = db.get_user(message_or_call.from_user.id)
     if user:
-        times = get_prayer_times(
+        times = await get_prayer_times(
             user.get("latitude", config.LATITUDE),
             user.get("longitude", config.LONGITUDE),
             user.get("timezone", config.TIMEZONE),
             user.get("city", config.CITY)
         )
     else:
-        times = get_prayer_times(config.LATITUDE, config.LONGITUDE, config.TIMEZONE, config.CITY)
+        times = await get_prayer_times(config.LATITUDE, config.LONGITUDE, config.TIMEZONE, config.CITY)
 
     text = format_prayer_times(times, user.get("city", config.CITY) if user else config.CITY)
 
@@ -827,14 +827,14 @@ async def callback_prayer_next(call: CallbackQuery):
     """Handle next prayer callback."""
     user = db.get_user(call.from_user.id)
     if user:
-        info = get_next_prayer(
+        info = await get_next_prayer(
             user.get("latitude", config.LATITUDE),
             user.get("longitude", config.LONGITUDE),
             user.get("timezone", config.TIMEZONE),
             user.get("city", config.CITY)
         )
     else:
-        info = get_next_prayer(config.LATITUDE, config.LONGITUDE, config.TIMEZONE, config.CITY)
+        info = await get_next_prayer(config.LATITUDE, config.LONGITUDE, config.TIMEZONE, config.CITY)
 
     text = format_next_prayer(info)
     await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:prayer"))

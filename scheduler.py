@@ -78,7 +78,7 @@ class BotScheduler:
                 for chunk in chunk_users(users, chunk_size=30):
                     for user in chunk:
                         try:
-                            times = get_prayer_times(
+                            times = await get_prayer_times(
                                 user.get("latitude", config.LATITUDE),
                                 user.get("longitude", config.LONGITUDE),
                                 user.get("timezone", config.TIMEZONE),
@@ -198,6 +198,7 @@ class BotScheduler:
 
                     if events:
                         users = db.get_subscribed_users("event_reminder")
+                        logger.info(f"[Event] المناسبات اليوم: {len(events)} مناسبة - إرسال لـ {len(users)} مشترك")
 
                         for user in users:
                             for event in events:
@@ -210,6 +211,8 @@ class BotScheduler:
                                     )
                                 except Exception as e:
                                     logger.error(f"Error sending event to {user['user_id']}: {e}")
+                    else:
+                        logger.info("[Event] لا توجد مناسبات لهذا اليوم - لم يتم إرسال أي إشعار")
 
                     await asyncio.sleep(120)
 
@@ -304,7 +307,7 @@ class BotScheduler:
 
                 for user in users:
                     try:
-                        times = get_prayer_times(
+                        times = await get_prayer_times(
                             user.get("latitude", config.LATITUDE),
                             user.get("longitude", config.LONGITUDE),
                             user.get("timezone", config.TIMEZONE),

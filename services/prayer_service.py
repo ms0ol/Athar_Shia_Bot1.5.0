@@ -4,10 +4,12 @@ Athar Shia Bot - Prayer Service
 """
 
 import math
+import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
 import database as db
+from services.aladhan_service import fetch_aladhan_times
 
 
 # ─── Prayer Time Calculations ───
@@ -178,8 +180,8 @@ class PrayerCalculator:
 
 # ─── Service Functions ───
 
-def get_prayer_times(lat: float, lng: float, timezone: str, city: str) -> Dict[str, str]:
-    """Get prayer times with caching."""
+async def get_prayer_times(lat: float, lng: float, timezone: str, city: str) -> Dict[str, str]:
+    """Get prayer times with caching. Aladhan API first, local calc fallback."""
     today = datetime.now().strftime("%Y-%m-%d")
 
     # Check cache
@@ -187,18 +189,26 @@ def get_prayer_times(lat: float, lng: float, timezone: str, city: str) -> Dict[s
     if cached:
         return cached
 
-    # Calculate
+    # Try Aladhan API first for accurate times
+    try:
+        times = await fetch_aladhan_times(lat, lng, date=today)
+        if times:
+            db.cache_prayer_times(today, city, times)
+            return times
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"[Aladhan fallback] {e}")
+
+    # Fallback to local calculator
     calc = PrayerCalculator(lat, lng, timezone)
     times = calc.calculate_times(datetime.now())
-
-    # Cache
     db.cache_prayer_times(today, city, times)
     return times
 
 
-def get_next_prayer(lat: float, lng: float, timezone: str, city: str) -> Dict:
+async def get_next_prayer(lat: float, lng: float, timezone: str, city: str) -> Dict:
     """Get information about the next prayer."""
-    times = get_prayer_times(lat, lng, timezone, city)
+    times = await get_prayer_times(lat, lng, timezone, city)
     now = datetime.now()
     current_time = now.hour * 60 + now.minute
 
