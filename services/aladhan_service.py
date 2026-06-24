@@ -91,15 +91,17 @@ async def fetch_aladhan_times(
                     if time_str:
                         result[our_key] = time_str
 
-                # If Aladhan didn't return midnight, compute it locally
+                # منتصف الليل الشرعي: منتصف المسافة بين المغرب وفجر اليوم التالي
+                # إذا لم يُعيد Aladhan قيمة منتصف الليل نحسبها يدوياً
                 if "midnight" not in result and "maghrib" in result and "fajr" in result:
                     try:
                         h, m = map(int, result["maghrib"].split(":"))
                         maghrib_mins = h * 60 + m
                         h, m = map(int, result["fajr"].split(":"))
                         fajr_mins = h * 60 + m
-                        # Midnight = halfway between Maghrib and Fajr+24h
-                        midnight_mins = (maghrib_mins + fajr_mins + 24 * 60) / 2
+                        # الفجر يُعامَل كيوم التالي (+24 ساعة) لأن الليل يبدأ من المغرب
+                        fajr_next_mins = fajr_mins + 24 * 60
+                        midnight_mins = (maghrib_mins + fajr_next_mins) / 2
                         midnight_mins %= (24 * 60)
                         result["midnight"] = f"{int(midnight_mins // 60):02d}:{int(midnight_mins % 60):02d}"
                     except Exception:

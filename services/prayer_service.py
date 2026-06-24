@@ -163,7 +163,8 @@ class PrayerCalculator:
         isha_time = self._compute_time(-14.0, decl, eqt, is_night=False)
         times["isha"] = self._format_time(isha_time)
 
-        # Midnight (Shia): halfway between Maghrib and next day's Fajr
+        # منتصف الليل الشرعي (الإمامية): منتصف المسافة بين المغرب وفجر اليوم التالي
+        # الفجر هنا يُحسب لليوم التالي (+ 24 ساعة) لأن الليل يبدأ من المغرب
         fajr_next = fajr_time + 24.0
         midnight_time = (maghrib_time + fajr_next) / 2.0
         times["midnight"] = self._format_time(midnight_time % 24)

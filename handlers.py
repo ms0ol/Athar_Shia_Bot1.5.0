@@ -1106,18 +1106,23 @@ async def callback_settings_city(call: CallbackQuery):
 async def callback_location_request_gps(call: CallbackQuery):
     """Ask the user to share their GPS location via reply keyboard."""
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    await call.answer()
+
     gps_kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     gps_kb.add(KeyboardButton(text="📍 مشاركة موقعي الحالي", request_location=True))
     gps_kb.add(KeyboardButton(text="🔙 إلغاء"))
 
-    await call.message.answer(
-        "📡 <b>مشاركة الموقع عبر GPS</b>\n\n"
-        "اضغط الزر أدناه لمشاركة موقعك الحالي.\n"
-        "سيُستخدم موقعك لحساب مواقيت الصلاة بدقة تامة.",
-        parse_mode="HTML",
-        reply_markup=gps_kb,
-    )
-    await call.answer()
+    try:
+        await call.message.answer(
+            "📡 <b>مشاركة الموقع عبر GPS</b>\n\n"
+            "اضغط الزر أدناه لمشاركة موقعك الحالي.\n"
+            "سيُستخدم موقعك لحساب مواقيت الصلاة بدقة تامة.\n\n"
+            "⚠️ <i>تأكد من تفعيل خدمة الموقع (GPS) في جهازك وإعطاء تطبيق تيليغرام إذن الوصول إليه.</i>",
+            parse_mode="HTML",
+            reply_markup=gps_kb,
+        )
+    except Exception as e:
+        logging.error(f"[GPS] فشل إرسال رسالة GPS: {e}")
 
 
 async def callback_location_manual(call: CallbackQuery):
@@ -1183,22 +1188,39 @@ async def handle_user_location(message: Message):
     if not message.location:
         return
 
+    from aiogram.types import ReplyKeyboardRemove
+
     lat = message.location.latitude
     lng = message.location.longitude
     user_id = message.from_user.id
 
-    db.update_user_location(user_id, "موقعي المخصص (GPS)", lat, lng)
+    try:
+        success = db.update_user_location(user_id, "موقعي المخصص (GPS)", lat, lng)
 
-    from aiogram.types import ReplyKeyboardRemove
-    await message.answer(
-        f"✅ <b>تم تحديث موقعك بنجاح!</b>\n\n"
-        f"📍 <b>الإحداثيات المستلمة:</b>\n"
-        f"• خط العرض: {lat:.5f}\n"
-        f"• خط الطول: {lng:.5f}\n\n"
-        f"ستعتمد مواقيت الصلاة الآن على موقعك الفعلي بدقة تامة. 🕌",
-        parse_mode="HTML",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+        if success:
+            await message.answer(
+                f"✅ <b>تم تحديث موقعك بنجاح!</b>\n\n"
+                f"📍 <b>الإحداثيات المستلمة:</b>\n"
+                f"• خط العرض: {lat:.5f}\n"
+                f"• خط الطول: {lng:.5f}\n\n"
+                f"ستعتمد مواقيت الصلاة الآن على موقعك الفعلي بدقة تامة. 🕌",
+                parse_mode="HTML",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+        else:
+            await message.answer(
+                "⚠️ لم يتم التعرف على حسابك. الرجاء إرسال /start أولاً ثم إعادة المحاولة.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+    except Exception as e:
+        logging.error(f"[GPS LOCATION] خطأ في معالجة موقع المستخدم {user_id}: {e}")
+        try:
+            await message.answer(
+                "⚠️ حدث خطأ أثناء حفظ الموقع. الرجاء المحاولة مرة أخرى.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+        except Exception:
+            pass
 
 
 async def handle_gps_cancel(message: Message):
