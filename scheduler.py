@@ -20,13 +20,40 @@ def _now() -> datetime:
     """Return current time in the configured timezone."""
     return datetime.now(pytz.timezone(config.TIMEZONE))
 
-def chunk_users(users_list, chunk_size=30):
-    """تقسيم قائمة المستخدمين إلى مجموعات صغيرة (كل مجموعة 30 مستخدم)"""
-    for i in range(0, len(users_list), chunk_size):
-        yield users_list[i:i + chunk_size]
-
-
 logger = logging.getLogger(__name__)
+
+
+async def safe_gather_send(coros: list, batch_size: int = 25, delay: float = 1.0):
+    """
+    نفّذ قائمة coroutines بإرسال متوازٍ آمن يحترم حدود تيليغرام.
+
+    القواعد المطبّقة:
+    • batch_size=25  → أقل من حد تيليغرام (30 رسالة/ثانية)
+    • delay=1.0 ثانية بين الدفعات → يضمن عدم تجاوز 25 رسالة/ثانية أبداً
+    • return_exceptions=True → فشل رسالة واحدة لا يوقف باقي الدفعة
+
+    يُرجع (sent, failed).
+    """
+    sent = failed = 0
+    total_batches = (len(coros) + batch_size - 1) // batch_size
+
+    for batch_idx, i in enumerate(range(0, len(coros), batch_size)):
+        batch = coros[i : i + batch_size]
+        results = await asyncio.gather(*batch, return_exceptions=True)
+
+        for r in results:
+            if isinstance(r, Exception):
+                failed += 1
+                logger.warning("safe_gather_send batch=%d/%d error: %s",
+                               batch_idx + 1, total_batches, r)
+            else:
+                sent += 1
+
+        if i + batch_size < len(coros):
+            await asyncio.sleep(delay)
+
+    logger.debug("safe_gather_send done: sent=%d failed=%d", sent, failed)
+    return sent, failed
 
 
 class BotScheduler:
@@ -74,61 +101,47 @@ class BotScheduler:
                 # Get all subscribed users
                 users = db.get_subscribed_users("prayer_reminder")
 
-                # تطبيق فكرتك: تقسيم المستخدمين إلى دفعات (كل دفعة 30 مستخدم)
-                for chunk in chunk_users(users, chunk_size=30):
-                    for user in chunk:
-                        try:
-                            times = await get_prayer_times(
-                                user.get("latitude", config.LATITUDE),
-                                user.get("longitude", config.LONGITUDE),
-                                user.get("timezone", config.TIMEZONE),
-                                user.get("city", config.CITY)
+                async def _send_prayer_to_user(user):
+                    times = await get_prayer_times(
+                        user.get("latitude", config.LATITUDE),
+                        user.get("longitude", config.LONGITUDE),
+                        user.get("timezone", config.TIMEZONE),
+                        user.get("city", config.CITY)
+                    )
+                    prayer_names = {
+                        "fajr": "الفجر 🌅",
+                        "dhuhr": "الظهر ☀️",
+                        "asr": "العصر 🌤",
+                        "maghrib": "المغرب 🌇",
+                        "isha": "العشاء 🌙"
+                    }
+                    for prayer, time_str in times.items():
+                        if prayer in ["sunrise", "midnight"]:
+                            continue
+                        if time_str == current_time:
+                            text = (
+                                f"🕌 <b>حان وقت صلاة {prayer_names.get(prayer, prayer)}</b>\n\n"
+                                f"📍 {user.get('city', config.CITY)}\n"
+                                f"🕐 {current_time}\n\n"
+                                f"📿 <b>الأذكار المستحبة:</b>\n"
+                                f"• تكبيرة الإحرام\n• سورة الحمد\n"
+                                f"• سورة الإخلاص (3 مرات)\n"
+                                f"• الصلاة على محمد وآل محمد\n"
+                                f"• الدعاء بعد الصلاة\n\n"
+                                f"<i>قال الإمام الصادق عليه السلام:\n"
+                                f"\"مَنْ تَوَضَّأَ وَأَحْسَنَ الوُضُوءَ ثُمَّ صَلَّى رَكْعَتَيْنِ"
+                                f" أوْ رَكْعَةً أجَارَهُ اللهُ مِنْ نَارِ جَهَنَّمَ\"</i>\n\n"
+                                f"🤲 تقبل الله صلاتكم"
+                            )
+                            await self.bot.send_message(
+                                user["user_id"], text, parse_mode="HTML"
                             )
 
-                            # Check if current time matches any prayer time
-                            for prayer, time_str in times.items():
-                                if prayer in ["sunrise", "midnight"]:
-                                    continue
-
-                                if time_str == current_time:
-                                    prayer_names = {
-                                        "fajr": "الفجر 🌅",
-                                        "dhuhr": "الظهر ☀️",
-                                        "asr": "العصر 🌤",
-                                        "maghrib": "المغرب 🌇",
-                                        "isha": "العشاء 🌙"
-                                    }
-
-                                    text = f"""
-    🕌 <b>حان وقت صلاة {prayer_names.get(prayer, prayer)}</b>
-
-    📍 {user.get('city', config.CITY)}
-    🕐 {current_time}
-
-    📿 <b>الأذكار المستحبة:</b>
-    • تكبيرة الإحرام
-    • سورة الحمد
-    • سورة الإخلاص (3 مرات)
-    • الصلاة على محمد وآل محمد
-    • الدعاء بعد الصلاة
-
-    <i>قال الإمام الصادق عليه السلام:
-    "مَنْ تَوَضَّأَ وَأَحْسَنَ الوُضُوءَ ثُمَّ صَلَّى رَكْعَتَيْنِ
-    أوْ رَكْعَةً أجَارَهُ اللهُ مِنْ نَارِ جَهَنَّمَ يَوْمَ يَقُومُ النَّاسُ لِرَبِّ العَالَمِينَ"</i>
-
-    🤲 تقبل الله صلاتكم
-    """
-                                    await self.bot.send_message(
-                                        user["user_id"],
-                                        text,
-                                        parse_mode="HTML"
-                                    )
-
-                        except Exception as e:
-                            logger.error(f"Error sending prayer reminder to {user['user_id']}: {e}")
-
-                    # الانتظار لمدة ثانيتين بعد كل 30 مستخدم كما اقترحت
-                    await asyncio.sleep(2)
+                coros = [_send_prayer_to_user(u) for u in users]
+                if coros:
+                    sent, failed = await safe_gather_send(coros)
+                    logger.info("[Prayer] إرسال: %d ✅  %d ❌  (من %d مستخدم)",
+                                sent, failed, len(users))
 
                 # Check every minute
                 await asyncio.sleep(60)
@@ -160,18 +173,20 @@ class BotScheduler:
                     for sub_type, title in content_types.items():
                         users = db.get_subscribed_users(sub_type)
 
-                        for user in users:
-                            try:
-                                content = get_random_content_for_subscription(sub_type, user["user_id"])
-                                if content:
-                                    text = f"{title}\n\n{content['text']}"
-                                    await self.bot.send_message(
-                                        user["user_id"],
-                                        text,
-                                        parse_mode="HTML"
-                                    )
-                            except Exception as e:
-                                logger.error(f"Error sending {sub_type} to {user['user_id']}: {e}")
+                        async def _send_content(user, _sub=sub_type, _title=title):
+                            content = get_random_content_for_subscription(_sub, user["user_id"])
+                            if content:
+                                await self.bot.send_message(
+                                    user["user_id"],
+                                    f"{_title}\n\n{content['text']}",
+                                    parse_mode="HTML"
+                                )
+
+                        coros = [_send_content(u) for u in users]
+                        if coros:
+                            sent, failed = await safe_gather_send(coros)
+                            logger.info("[Daily:%s] إرسال: %d ✅  %d ❌",
+                                        sub_type, sent, failed)
 
                     # Wait to avoid duplicate sends
                     await asyncio.sleep(120)
@@ -200,17 +215,19 @@ class BotScheduler:
                         users = db.get_subscribed_users("event_reminder")
                         logger.info(f"[Event] المناسبات اليوم: {len(events)} مناسبة - إرسال لـ {len(users)} مشترك")
 
-                        for user in users:
-                            for event in events:
-                                try:
-                                    text = format_event(event)
-                                    await self.bot.send_message(
-                                        user["user_id"],
-                                        text,
-                                        parse_mode="HTML"
-                                    )
-                                except Exception as e:
-                                    logger.error(f"Error sending event to {user['user_id']}: {e}")
+                        async def _send_event(user, event):
+                            await self.bot.send_message(
+                                user["user_id"], format_event(event), parse_mode="HTML"
+                            )
+
+                        coros = [
+                            _send_event(u, ev)
+                            for u in users
+                            for ev in events
+                        ]
+                        sent, failed = await safe_gather_send(coros)
+                        logger.info("[Event] إرسال: %d ✅  %d ❌  (من %d مستخدم × %d مناسبة)",
+                                    sent, failed, len(users), len(events))
                     else:
                         logger.info("[Event] لا توجد مناسبات لهذا اليوم - لم يتم إرسال أي إشعار")
 
@@ -270,18 +287,14 @@ class BotScheduler:
     "مَنْ أَكْثَرَ اسْتِغْفَارَهُ فِي شَعْبَانَ أَخْرَجَهُ اللهُ مِنْ قَبْرِهِ
     وَوُجُوهُهُ كَالْقَمَرِ فِي لَيْلَةِ الْبَدْرِ"</i>
     """
-                    # Send to all users
                     users = db.get_all_users()
-
-                    # تطبيق فكرتك: تقسيم الإرسال إلى مجموعات بانتظار ثانيتين
-                    for chunk in chunk_users(users, chunk_size=30):
-                        for user in chunk:
-                            try:
-                                await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
-                            except Exception as e:
-                                logger.error(f"Error sending tasbih reminder: {e}")
-
-                        await asyncio.sleep(2) # انتظار ثانيتين
+                    coros = [
+                        self.bot.send_message(u["user_id"], text, parse_mode="HTML")
+                        for u in users
+                    ]
+                    if coros:
+                        sent, failed = await safe_gather_send(coros)
+                        logger.info("[Tasbih] إرسال: %d ✅  %d ❌", sent, failed)
 
                     await asyncio.sleep(120)
 
@@ -305,37 +318,39 @@ class BotScheduler:
 
                 users = db.get_subscribed_users("prayer_reminder")
 
-                for user in users:
-                    try:
-                        times = await get_prayer_times(
-                            user.get("latitude", config.LATITUDE),
-                            user.get("longitude", config.LONGITUDE),
-                            user.get("timezone", config.TIMEZONE),
-                            user.get("city", config.CITY)
-                        )
-                        prayer_names_ar = {
-                            "fajr":    "الفجر 🌅",
-                            "dhuhr":   "الظهر ☀️",
-                            "asr":     "العصر 🌤",
-                            "maghrib": "المغرب 🌇",
-                            "isha":    "العشاء 🌙",
-                        }
-                        for prayer, time_str in times.items():
-                            if prayer in ["sunrise", "midnight", "asr"]:
-                                continue
-                            if time_str == future_time:
-                                text = (
-                                    f"⏰ <b>تذكير: صلاة {prayer_names_ar.get(prayer, prayer)} بعد 15 دقيقة</b>\n\n"
-                                    f"📍 {user.get('city', config.CITY)}\n"
-                                    f"🕐 موعد الصلاة: {time_str}\n\n"
-                                    f"📿 استعد وأوضأ من الآن\n"
-                                    f"🤲 الصلاة على محمد وآل محمد"
-                                )
-                                await self.bot.send_message(
-                                    user["user_id"], text, parse_mode="HTML"
-                                )
-                    except Exception as e:
-                        logger.error(f"Pre-prayer reminder error for {user['user_id']}: {e}")
+                async def _send_pre_prayer(user, _future_time=future_time):
+                    times = await get_prayer_times(
+                        user.get("latitude", config.LATITUDE),
+                        user.get("longitude", config.LONGITUDE),
+                        user.get("timezone", config.TIMEZONE),
+                        user.get("city", config.CITY)
+                    )
+                    prayer_names_ar = {
+                        "fajr":    "الفجر 🌅",
+                        "dhuhr":   "الظهر ☀️",
+                        "asr":     "العصر 🌤",
+                        "maghrib": "المغرب 🌇",
+                        "isha":    "العشاء 🌙",
+                    }
+                    for prayer, time_str in times.items():
+                        if prayer in ["sunrise", "midnight", "asr"]:
+                            continue
+                        if time_str == _future_time:
+                            text = (
+                                f"⏰ <b>تذكير: صلاة {prayer_names_ar.get(prayer, prayer)} بعد 15 دقيقة</b>\n\n"
+                                f"📍 {user.get('city', config.CITY)}\n"
+                                f"🕐 موعد الصلاة: {time_str}\n\n"
+                                f"📿 استعد وأوضأ من الآن\n"
+                                f"🤲 الصلاة على محمد وآل محمد"
+                            )
+                            await self.bot.send_message(
+                                user["user_id"], text, parse_mode="HTML"
+                            )
+
+                coros = [_send_pre_prayer(u) for u in users]
+                if coros:
+                    sent, failed = await safe_gather_send(coros)
+                    logger.info("[PrePrayer] إرسال: %d ✅  %d ❌", sent, failed)
 
                 await asyncio.sleep(60)
 
@@ -452,21 +467,15 @@ class BotScheduler:
     # ─── Manual Trigger (for admin) ───
 
     async def send_broadcast(self, text: str, admin_only: bool = False):
-        """Send a broadcast message to all users."""
+        """
+        إرسال رسالة جماعية بـ asyncio.gather مع حماية حدود تيليغرام.
+        25 رسالة/دفعة + انتظار 1 ثانية بين الدفعات = أقصى 25 رسالة/ثانية.
+        """
         users = db.get_all_users()
-        sent = 0
-        failed = 0
-
-        # تطبيق فكرتك لحماية البوت أثناء الإرسال اليدوي الجماعي
-        for chunk in chunk_users(users, chunk_size=30):
-            for user in chunk:
-                try:
-                    await self.bot.send_message(user["user_id"], text, parse_mode="HTML")
-                    sent += 1
-                except Exception as e:
-                    logger.error(f"Broadcast failed for {user['user_id']}: {e}")
-                    failed += 1
-
-            await asyncio.sleep(2) # انتظار ثانيتين قبل الانتقال لـ 30 مستخدم آخرين
-
+        coros = [
+            self.bot.send_message(u["user_id"], text, parse_mode="HTML")
+            for u in users
+        ]
+        sent, failed = await safe_gather_send(coros)
+        logger.info("[Broadcast] إرسال: %d ✅  %d ❌  (إجمالي: %d)", sent, failed, len(users))
         return sent, failed

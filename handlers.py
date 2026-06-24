@@ -1575,21 +1575,21 @@ async def cmd_broadcast(message: Message):
             reply_markup.add(InlineKeyboardButton(text=btn_text, url=deep_link_url))
 
     users = db.get_all_users()
-    await message.answer(f"📢 جاري الإرسال إلى {len(users)} مستخدم…")
+    await message.answer(
+        f"📢 جاري الإرسال إلى <b>{len(users)}</b> مستخدم…\n"
+        f"<i>(دفعات 25 رسالة/ثانية — آمن من حدود تيليغرام)</i>",
+        parse_mode="HTML"
+    )
 
-    sent = failed = 0
-    for user in users:
-        try:
-            await message.bot.send_message(
-                user["user_id"], 
-                text_to_send, 
-                parse_mode="HTML", 
-                reply_markup=reply_markup
-            )
-            sent += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            failed += 1
+    from scheduler import safe_gather_send
+
+    coros = [
+        message.bot.send_message(
+            u["user_id"], text_to_send, parse_mode="HTML", reply_markup=reply_markup
+        )
+        for u in users
+    ]
+    sent, failed = await safe_gather_send(coros)
 
     await message.answer(
         f"✅ <b>اكتمل البث</b>\n\n• تم الإرسال: {sent}\n• فشل: {failed}",
