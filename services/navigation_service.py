@@ -164,11 +164,44 @@ def settings_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(
         make_button("🔔 اشتراكاتي", "settings:subs"),
-        make_button("🕌 المدينة", "settings:city"),
+        make_button("📍 الموقع الجغرافي", "settings:city"),
         make_button("🕐 المنطقة الزمنية", "settings:timezone"),
         make_button("ℹ️ حول البوت", "settings:about"),
         make_button("🏠 الرئيسية", "menu:main"),
     )
+    return kb
+
+
+def location_settings_menu() -> InlineKeyboardMarkup:
+    """Build the location selection menu (GPS or manual)."""
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        make_button("📡 مشاركة موقعي الحالي (GPS) ← موصى به", "location:request_gps"),
+        make_button("🗺 اختيار المحافظة يدوياً", "location:manual"),
+        make_button("🔙 الإعدادات", "menu:settings"),
+    )
+    return kb
+
+
+def governorates_keyboard() -> InlineKeyboardMarkup:
+    """Build Iraqi governorates selection keyboard."""
+    from services.location_data import IRAQ_CITIES
+    kb = InlineKeyboardMarkup(row_width=2)
+    for gov in IRAQ_CITIES.keys():
+        kb.add(make_button(gov, f"location:gov:{gov}"))
+    kb.add(make_button("🔙 رجوع", "settings:city"))
+    return kb
+
+
+def districts_keyboard(governorate: str) -> InlineKeyboardMarkup:
+    """Build districts selection keyboard for a given governorate."""
+    from services.location_data import IRAQ_CITIES
+    kb = InlineKeyboardMarkup(row_width=1)
+    districts = IRAQ_CITIES.get(governorate, {})
+    for district in districts.keys():
+        safe_district = district.replace(":", "_")
+        kb.add(make_button(district, f"location:district:{governorate}:{safe_district}"))
+    kb.add(make_button("🔙 المحافظات", "location:manual"))
     return kb
 
 

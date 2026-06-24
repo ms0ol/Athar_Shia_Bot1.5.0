@@ -38,8 +38,10 @@ from services.navigation_service import (
     prayer_menu, events_menu, daily_menu, settings_menu,
     subscriptions_settings_menu, back_button, pagination_buttons,
     favorites_menu, content_actions_keyboard, make_button,
-    admin_settings_menu,
+    admin_settings_menu, location_settings_menu, governorates_keyboard,
+    districts_keyboard,
 )
+from services.location_data import IRAQ_CITIES
 
 # ─── Tracker for PDFs sent in day_works ───
 # {user_id: [message_id, ...]} – deleted when user navigates away
@@ -1083,22 +1085,129 @@ async def callback_toggle_subscription(call: CallbackQuery):
 
 
 async def callback_settings_city(call: CallbackQuery):
-    """Handle city settings."""
-    text = """
-🕌 <b>تغيير المدينة</b>
+    """Handle city/location settings — show GPS or manual options."""
+    user = db.get_user(call.from_user.id)
+    current_city = user.get("city", config.CITY) if user else config.CITY
+    current_lat  = user.get("latitude",  config.LATITUDE)  if user else config.LATITUDE
+    current_lng  = user.get("longitude", config.LONGITUDE) if user else config.LONGITUDE
 
-حالياً البوت يستخدم إحداثيات بغداد كافتراضي.
-
-لتغيير المدينة، أرسل الأمر:
-<code>/city اسم_المدينة</code>
-
-مثال:
-<code>/city كربلاء</code>
-<code>/city النجف</code>
-<code>/city طهران</code>
-"""
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=back_button("menu:settings"))
+    text = (
+        "📍 <b>إعداد الموقع الجغرافي</b>\n\n"
+        f"📌 <b>موقعك الحالي:</b> {current_city}\n"
+        f"🌐 الإحداثيات: {current_lat:.4f}, {current_lng:.4f}\n\n"
+        "اختر طريقة تحديث الموقع:\n\n"
+        "📡 <b>GPS (موصى به):</b> دقة تامة بناءً على موقعك الفعلي.\n"
+        "🗺 <b>يدوي:</b> اختر محافظتك وقضاءك من القائمة."
+    )
+    await call.message.edit_text(text, parse_mode="HTML", reply_markup=location_settings_menu())
     await call.answer()
+
+
+async def callback_location_request_gps(call: CallbackQuery):
+    """Ask the user to share their GPS location via reply keyboard."""
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    gps_kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    gps_kb.add(KeyboardButton(text="📍 مشاركة موقعي الحالي", request_location=True))
+    gps_kb.add(KeyboardButton(text="🔙 إلغاء"))
+
+    await call.message.answer(
+        "📡 <b>مشاركة الموقع عبر GPS</b>\n\n"
+        "اضغط الزر أدناه لمشاركة موقعك الحالي.\n"
+        "سيُستخدم موقعك لحساب مواقيت الصلاة بدقة تامة.",
+        parse_mode="HTML",
+        reply_markup=gps_kb,
+    )
+    await call.answer()
+
+
+async def callback_location_manual(call: CallbackQuery):
+    """Show Iraqi governorates for manual selection."""
+    await call.message.edit_text(
+        "🗺 <b>اختيار المحافظة</b>\n\nاختر محافظتك من القائمة:",
+        parse_mode="HTML",
+        reply_markup=governorates_keyboard(),
+    )
+    await call.answer()
+
+
+async def callback_location_governorate(call: CallbackQuery):
+    """Show districts for the selected governorate."""
+    governorate = call.data.split("location:gov:", 1)[1]
+    if governorate not in IRAQ_CITIES:
+        await call.answer("⚠️ محافظة غير موجودة", show_alert=True)
+        return
+
+    await call.message.edit_text(
+        f"🗺 <b>محافظة {governorate}</b>\n\nاختر القضاء:",
+        parse_mode="HTML",
+        reply_markup=districts_keyboard(governorate),
+    )
+    await call.answer()
+
+
+async def callback_location_district(call: CallbackQuery):
+    """Save the selected district coordinates for the user."""
+    parts = call.data.split(":", 3)
+    if len(parts) < 4:
+        await call.answer("⚠️ بيانات غير صحيحة", show_alert=True)
+        return
+
+    governorate = parts[2]
+    district_safe = parts[3]
+    district = district_safe.replace("_", ":")
+
+    coords = IRAQ_CITIES.get(governorate, {}).get(district)
+    if not coords:
+        await call.answer("⚠️ القضاء غير موجود", show_alert=True)
+        return
+
+    lat = coords["lat"]
+    lng = coords["lng"]
+    city_label = f"{governorate} - {district}"
+
+    db.update_user_location(call.from_user.id, city_label, lat, lng)
+
+    await call.message.edit_text(
+        f"✅ <b>تم تحديث موقعك بنجاح!</b>\n\n"
+        f"📌 <b>المنطقة:</b> {city_label}\n"
+        f"🌐 الإحداثيات: {lat:.4f}, {lng:.4f}\n\n"
+        f"ستعتمد مواقيت الصلاة الآن على هذا الموقع.",
+        parse_mode="HTML",
+        reply_markup=back_button("menu:settings"),
+    )
+    await call.answer("✅ تم حفظ الموقع")
+
+
+async def handle_user_location(message: Message):
+    """Handle GPS location message sent by the user."""
+    if not message.location:
+        return
+
+    lat = message.location.latitude
+    lng = message.location.longitude
+    user_id = message.from_user.id
+
+    db.update_user_location(user_id, "موقعي المخصص (GPS)", lat, lng)
+
+    from aiogram.types import ReplyKeyboardRemove
+    await message.answer(
+        f"✅ <b>تم تحديث موقعك بنجاح!</b>\n\n"
+        f"📍 <b>الإحداثيات المستلمة:</b>\n"
+        f"• خط العرض: {lat:.5f}\n"
+        f"• خط الطول: {lng:.5f}\n\n"
+        f"ستعتمد مواقيت الصلاة الآن على موقعك الفعلي بدقة تامة. 🕌",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
+async def handle_gps_cancel(message: Message):
+    """Handle cancellation of GPS location request."""
+    from aiogram.types import ReplyKeyboardRemove
+    await message.answer(
+        "🔙 تم الإلغاء. يمكنك تغيير الموقع في أي وقت من الإعدادات.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 async def cmd_city(message: Message):
@@ -1753,6 +1862,16 @@ def register_handlers(dp: Dispatcher):
     dp.register_callback_query_handler(callback_settings_city, lambda c: c.data == "settings:city")
     dp.register_callback_query_handler(callback_settings_timezone, lambda c: c.data == "settings:timezone")
     dp.register_callback_query_handler(callback_settings_about, lambda c: c.data == "settings:about")
+
+    # ─── Location Callbacks ───
+    dp.register_callback_query_handler(callback_location_request_gps, lambda c: c.data == "location:request_gps")
+    dp.register_callback_query_handler(callback_location_manual, lambda c: c.data == "location:manual")
+    dp.register_callback_query_handler(callback_location_governorate, lambda c: c.data.startswith("location:gov:"))
+    dp.register_callback_query_handler(callback_location_district, lambda c: c.data.startswith("location:district:"))
+
+    # ─── GPS Location Message ───
+    dp.register_message_handler(handle_user_location, content_types=["location"])
+    dp.register_message_handler(handle_gps_cancel, lambda m: m.text == "🔙 إلغاء")
 
     # ─── Pagination ───
     dp.register_callback_query_handler(callback_pagination, lambda c: c.data.startswith(("dua_lib:", "ziyarat_lib:", "munajat_lib:", "hadith_lib:", "wisdom_lib:")))
