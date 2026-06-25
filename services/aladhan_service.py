@@ -15,19 +15,17 @@ Calculation parameters:
 import logging
 from datetime import datetime
 from typing import Dict, Optional
-
 import aiohttp
 import aiohttp.client_exceptions
+import pytz  # مضاف لضمان استقرار حساب التاريخ الفعلي داخل العراق
 
 logger = logging.getLogger(__name__)
 
 ALADHAN_BASE = "https://api.aladhan.com/v1"
+METHOD_JAFARI = 0
+SCHOOL_HANAFI = 0
 
-# Jafari/Shia method identifiers
-METHOD_JAFARI = 1
-SCHOOL_HANAFI = 1
-
-# Mapping from Aladhan keys to our internal keys
+# تم إزالة الجلب التلقائي لـ Midnight من هنا لإجبار البوت على الحساب الجعفري اليدوي
 _KEY_MAP = {
     "Fajr": "fajr",
     "Sunrise": "sunrise",
@@ -36,8 +34,9 @@ _KEY_MAP = {
     "Sunset": "sunset",
     "Maghrib": "maghrib",
     "Isha": "isha",
-    "Midnight": "midnight",
 }
+
+
 
 
 async def fetch_aladhan_times(
@@ -52,7 +51,7 @@ async def fetch_aladhan_times(
     Args:
         lat: Latitude (float)
         lng: Longitude (float)
-        date: Date in DD-MM-YYYY format (default: today)
+        date: Date in DD-MM-YYYY format (default: today in Asia/Baghdad)
         timeout: Request timeout in seconds
 
     Returns:
@@ -60,8 +59,11 @@ async def fetch_aladhan_times(
                               maghrib, isha, midnight
         or None if the API call fails.
     """
+    # إصلاح ذكي: إذا كان السيرفر مستضافاً خارج العراق، datetime.now() قد تعطي تاريخاً خاطئاً ليلاً.
+    # هنا نجبر النظام على جلب تاريخ اليوم الفعلي بحسب توقيت بغداد.
     if date is None:
-        date = datetime.now().strftime("%d-%m-%Y")
+        tz = pytz.timezone("Asia/Baghdad")
+        date = datetime.now(tz).strftime("%d-%m-%Y")
 
     url = (
         f"{ALADHAN_BASE}/timings/{date}"
@@ -86,28 +88,33 @@ async def fetch_aladhan_times(
 
                 timings = data["data"]["timings"]
                 result = {}
+
+                # استخراج المواقيت وتنظيف النص المستلم (مثل قطع نصوص المناطق الزمنية المضافة كـ " (EEST)")
                 for aladhan_key, our_key in _KEY_MAP.items():
                     time_str = timings.get(aladhan_key)
                     if time_str:
-                        result[our_key] = time_str
+                        result[our_key] = time_str.split()[0][:5]
 
-                # منتصف الليل الشرعي: منتصف المسافة بين المغرب وفجر اليوم التالي
-                # إذا لم يُعيد Aladhan قيمة منتصف الليل نحسبها يدوياً
-                if "midnight" not in result and "maghrib" in result and "fajr" in result:
+                # حساب منتصف الليل الشرعي (المذهب الجعفري): المنتصف الدقيق بين المغرب وفجر اليوم التالي
+                if "maghrib" in result and "fajr" in result:
                     try:
-                        h, m = map(int, result["maghrib"].split(":"))
-                        maghrib_mins = h * 60 + m
-                        h, m = map(int, result["fajr"].split(":"))
-                        fajr_mins = h * 60 + m
-                        # الفجر يُعامَل كيوم التالي (+24 ساعة) لأن الليل يبدأ من المغرب
+                        h_maghrib, m_maghrib = map(int, result["maghrib"].split(":"))
+                        maghrib_mins = h_maghrib * 60 + m_maghrib
+
+                        h_fajr, m_fajr = map(int, result["fajr"].split(":"))
+                        fajr_mins = h_fajr * 60 + m_fajr
+
+                        # تحويل وقت الفجر إلى دقائق مضافة لليوم التالي (+24 ساعة) لضمان دقة عملية الطرح
                         fajr_next_mins = fajr_mins + 24 * 60
                         midnight_mins = (maghrib_mins + fajr_next_mins) / 2
                         midnight_mins %= (24 * 60)
-                        result["midnight"] = f"{int(midnight_mins // 60):02d}:{int(midnight_mins % 60):02d}"
-                    except Exception:
-                        pass
 
-                logger.info(f"[Aladhan] ✅ Timings fetched for {lat},{lng}: {result.get('fajr')} - {result.get('isha')}")
+                        result["midnight"] = f"{int(midnight_mins // 60):02d}:{int(midnight_mins % 60):02d}"
+                    except Exception as calc_err:
+                        logger.error(f"[Aladhan] Midnight manual calculation failed: {calc_err}")
+                        result["midnight"] = "23:59"  # قيمة احتياطية آمنة في حال حدوث خطأ غير متوقع في التحليل
+
+                logger.info(f"[Aladhan] ✅ Timings successfully fetched for {lat},{lng}. Midnight: {result.get('midnight')}")
                 return result
 
     except (aiohttp.ClientError, aiohttp.client_exceptions.ClientConnectorError) as e:
@@ -116,3 +123,5 @@ async def fetch_aladhan_times(
     except Exception as e:
         logger.error(f"[Aladhan] Unexpected error: {e}")
         return None
+
+
