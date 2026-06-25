@@ -11,6 +11,7 @@ Required environment variables:
 
 import asyncio
 import logging
+import os
 import sys
 
 from aiogram import Bot, Dispatcher, executor
@@ -34,6 +35,43 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# ─── PID Lock (prevent multiple instances) ───
+
+PID_FILE = "/tmp/athar_bot.pid"
+
+
+def acquire_pid_lock():
+    """Ensure only one instance of the bot is running."""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                old_pid = int(f.read().strip())
+            # Check if the old process is still alive
+            os.kill(old_pid, 0)
+            logger.error(f"❌ Another instance is already running (PID {old_pid}). Killing it...")
+            os.kill(old_pid, 9)
+            import time
+            time.sleep(2)
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    logger.info(f"✅ PID lock acquired (PID {os.getpid()})")
+
+
+def release_pid_lock():
+    """Remove the PID lock file."""
+    try:
+        if os.path.exists(PID_FILE):
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+            if pid == os.getpid():
+                os.remove(PID_FILE)
+    except Exception:
+        pass
+
+
 # ─── Bot & Dispatcher ───
 
 storage = MemoryStorage()
@@ -50,6 +88,10 @@ scheduler = BotScheduler(bot)
 async def on_startup(dispatcher):
     """Actions on bot startup."""
     logger.info("🚀 Starting Athar Shia Bot...")
+
+    # Delete any existing webhook to avoid conflicts
+    await bot.delete_webhook(drop_pending_updates=False)
+    logger.info("✅ Webhook cleared")
 
     # Initialize database
     db.init_database()
@@ -101,6 +143,7 @@ async def on_shutdown(dispatcher):
     await dispatcher.storage.close()
     await dispatcher.storage.wait_closed()
     await bot.session.close()
+    release_pid_lock()
     logger.info("👋 Bot stopped")
 
 
@@ -128,6 +171,9 @@ def main():
 ╚══════════════════════════════════════════════════════════════╝
         """)
         sys.exit(1)
+
+    # Acquire PID lock (kills old instance if running)
+    acquire_pid_lock()
 
     # Register rate limit middleware
     dp.middleware.setup(RateLimitMiddleware(admin_ids=config.ADMIN_IDS))
