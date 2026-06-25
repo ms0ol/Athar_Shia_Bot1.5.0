@@ -22,8 +22,8 @@ import pytz  # مضاف لضمان استقرار حساب التاريخ الف
 logger = logging.getLogger(__name__)
 
 ALADHAN_BASE = "https://api.aladhan.com/v1"
-METHOD_JAFARI = 0
-SCHOOL_HANAFI = 0
+METHOD_JAFARI = 1
+SCHOOL_HANAFI = 1
 
 # تم إزالة الجلب التلقائي لـ Midnight من هنا لإجبار البوت على الحساب الجعفري اليدوي
 _KEY_MAP = {
