@@ -233,6 +233,42 @@ def format_hijri_date(hijri: Dict) -> str:
     return f"{hijri['day']} {hijri['month_name']} {hijri['year']} هـ"
 
 
+def _sanitize_html(text: str) -> str:
+    """
+    Removes unsupported HTML attributes and safely closes any unclosed tags.
+    aiogram v2 / Telegram HTML mode does NOT support <blockquote expandable>.
+    """
+    # Replace <blockquote expandable> (and any other blockquote with attrs) → <blockquote>
+    text = re.sub(r'<blockquote\s+[^>]*>', '<blockquote>', text)
+    return text
+
+
+def _safe_truncate_html(text: str, max_len: int) -> str:
+    """
+    Truncates HTML text at max_len characters and closes any unclosed tags.
+    """
+    if len(text) <= max_len:
+        return text
+
+    truncated = text[:max_len]
+
+    # Find unclosed tags and close them in reverse order
+    open_tags = []
+    for match in re.finditer(r'<(/?)(\w+)(?:\s[^>]*)?>',  truncated):
+        is_closing = match.group(1) == '/'
+        tag = match.group(2).lower()
+        if tag in ('br', 'hr', 'img', 'input'):
+            continue
+        if is_closing:
+            if open_tags and open_tags[-1] == tag:
+                open_tags.pop()
+        else:
+            open_tags.append(tag)
+
+    closing = ''.join(f'</{t}>' for t in reversed(open_tags))
+    return truncated + closing
+
+
 def format_event(event: Dict) -> str:
     text  = event.get("text", "")
     month_name = event.get("month", "")
@@ -241,10 +277,14 @@ def format_event(event: Dict) -> str:
     if not month_name:
         month_name = get_hijri_month_name(m)
 
+    text = _sanitize_html(text)
+
     result  = f"📅 <b>{d} {month_name}</b>\n\n"
-    result += text[:3800]
     if len(text) > 3800:
+        result += _safe_truncate_html(text, 3800)
         result += "\n\n<i>... (يتبع)</i>"
+    else:
+        result += text
     return result
 
 
