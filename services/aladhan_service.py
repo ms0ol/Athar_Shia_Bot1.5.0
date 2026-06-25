@@ -22,8 +22,8 @@ import pytz  # مضاف لضمان استقرار حساب التاريخ الف
 logger = logging.getLogger(__name__)
 
 ALADHAN_BASE = "https://api.aladhan.com/v1"
-METHOD_JAFARI = 1
-SCHOOL_HANAFI = 1
+METHOD_JAFARI = 0
+SCHOOL_HANAFI = 0
 
 # تم إزالة الجلب التلقائي لـ Midnight من هنا لإجبار البوت على الحساب الجعفري اليدوي
 _KEY_MAP = {
@@ -65,13 +65,16 @@ async def fetch_aladhan_times(
         tz = pytz.timezone("Asia/Baghdad")
         date = datetime.now(tz).strftime("%d-%m-%Y")
 
+    # داخل دالة fetch_aladhan_times قم بتحديث رابط الـ URL ليقبل معامل الـ tune والـ method الصحيح:
     url = (
         f"{ALADHAN_BASE}/timings/{date}"
         f"?latitude={lat}"
         f"&longitude={lng}"
-        f"&method={METHOD_JAFARI}"
+        f"&method=0"  # استخدام 0 لمؤسسة لواء في قم لضبط المغرب
         f"&school={SCHOOL_HANAFI}"
+        f"&tune=0,-10,0,0,0,0,0,0,0" # تقديم الفجر 10 دقائق لحل مشكلة التأخير
     )
+
 
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
