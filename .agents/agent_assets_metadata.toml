@@ -6,3 +6,9 @@ id = "ooohsvwGZy7RT5fbeBLsf"
 uri = "file://ATHAR_BOT_REPORT.md"
 type = "text"
 title = "تقرير بوت آثار الشيعة — شرح كامل للمشروع"
+
+[[outputs]]
+id = "IDhQg2FmZ1BhPz00lO6av"
+uri = "file://PROJECT_OVERVIEW.md"
+type = "text"
+title = "توثيق المشروع — أثَر | ATHAR"

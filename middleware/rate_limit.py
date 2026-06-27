@@ -6,10 +6,10 @@ Rate Limiting Middleware — Athar Bot
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
+from typing import Any, Awaitable, Callable, Dict
 
-from aiogram import types
-from aiogram.dispatcher.handler import CancelHandler
-from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram import BaseMiddleware
+from aiogram.types import Message, CallbackQuery, TelegramObject
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +52,45 @@ class RateLimitMiddleware(BaseMiddleware):
         self._minute_log[user_id].append(now)
         self._hour_log[user_id].append(now)
 
-    async def on_process_message(self, message: types.Message, data: dict):
-        user_id = message.from_user.id
-        limit = self._is_limited(user_id)
-        if limit == "minute":
-            if user_id not in self._warned:
-                self._warned.add(user_id)
-                await message.answer("⚠️ أرسلت كثيراً من الرسائل. انتظر دقيقة واحدة.")
-            raise CancelHandler()
-        if limit == "hour":
-            if user_id not in self._warned:
-                self._warned.add(user_id)
-                await message.answer("⚠️ تجاوزت الحد المسموح. انتظر قليلاً.")
-            raise CancelHandler()
-        self._warned.discard(user_id)
-        self._record(user_id)
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: Dict[str, Any],
+    ) -> Any:
+        user_id = None
 
-    async def on_process_callback_query(self, call: types.CallbackQuery, data: dict):
-        user_id = call.from_user.id
+        if isinstance(event, Message):
+            user_id = event.from_user.id if event.from_user else None
+        elif isinstance(event, CallbackQuery):
+            user_id = event.from_user.id if event.from_user else None
+
+        if user_id is None:
+            return await handler(event, data)
+
         limit = self._is_limited(user_id)
-        if limit == "minute":
-            await call.answer("⚠️ طلبات كثيرة جداً. انتظر دقيقة.", show_alert=True)
-            raise CancelHandler()
-        if limit == "hour":
-            await call.answer("⚠️ تجاوزت الحد المسموح. انتظر قليلاً.", show_alert=True)
-            raise CancelHandler()
-        self._record(user_id)
+
+        if isinstance(event, Message):
+            if limit == "minute":
+                if user_id not in self._warned:
+                    self._warned.add(user_id)
+                    await event.answer("⚠️ أرسلت كثيراً من الرسائل. انتظر دقيقة واحدة.")
+                return
+            if limit == "hour":
+                if user_id not in self._warned:
+                    self._warned.add(user_id)
+                    await event.answer("⚠️ تجاوزت الحد المسموح. انتظر قليلاً.")
+                return
+            self._warned.discard(user_id)
+            self._record(user_id)
+
+        elif isinstance(event, CallbackQuery):
+            if limit == "minute":
+                await event.answer("⚠️ طلبات كثيرة جداً. انتظر دقيقة.", show_alert=True)
+                return
+            if limit == "hour":
+                await event.answer("⚠️ تجاوزت الحد المسموح. انتظر قليلاً.", show_alert=True)
+                return
+            self._record(user_id)
+
+        return await handler(event, data)
