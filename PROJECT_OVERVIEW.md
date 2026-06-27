@@ -9,7 +9,7 @@
         ↓
    app.py  ← نقطة الدخول الرئيسية
         ↓
-   Dispatcher (aiogram)
+   Dispatcher (aiogram v3)
         ↓
    RateLimitMiddleware  ← فلترة الطلبات المتكررة
         ↓
@@ -62,7 +62,7 @@
 | `handlers/events.py` | المناسبات والتقويم الهجري | `/event`, `event:*` | 68 |
 | `handlers/daily.py` | المحتوى اليومي والمفضلة والاشتراكات | `/daily`, `/subs`, `daily:*`, `sub_toggle:*`, `fav:*`, `*_lib:*` | 365 |
 | `handlers/admin.py` | أوامر الأدمن والبث | `/admin`, `/stats`, `/broadcast`, `/errors` | 183 |
-| `handlers/__init__.py` | تجميع وربط الـ Routers | يستير ويدمج كلـ Routers | 25 |
+| `handlers/__init__.py` | تجميع وربط الـ Routers | يستير ويدمج كل Routers | 25 |
 
 **التحديثات المطبَّقة (v2 → v3):**
 - `Dispatcher` → `Router` مع Decorators (`@router.message(Command(...))`)
@@ -99,18 +99,45 @@
 ### `database.py` — 569 سطر ✅
 **الدور:** طبقة البيانات — SQLite محلي في `storage/bot.db`
 
-**الجداول:**
+#### الجداول:
 
 | الجدول | الحقول | الدور |
 |---|---|---|
-| `users` | user_id, username, full_name, city, timezone, latitude, longitude, created_at, last_active | بيانات المستخدمين |
-| `subscriptions` | user_id, type, is_active | اشتراكات الإشعارات |
-| `sent_content` | user_id, content_type, content_id | تتبع المحتوى المُرسَل |
-| `bot_state` | key, value | حالة البوت (مفاتيح/قيم) |
-| `prayer_times_cache` | date, city, fajr..isha | كاش أوقات الصلاة |
-| `dua_files` | dua_id, file_id, title | file_id للـ PDFs المسجّلة |
-| `favorites` | user_id, content_type, content_id, title | مفضلات المستخدم |
-| `error_logs` | user_id, command, error_msg | سجل الأخطاء |
+| `users` | `user_id PK, username, full_name, city, timezone, latitude, longitude, created_at, last_active` | بيانات المستخدمين |
+| `subscriptions` | `id PK AUTOINCREMENT, user_id FK→users, type, is_active, created_at` | اشتراكات الإشعارات |
+| `sent_content` | `id PK AUTOINCREMENT, user_id FK→users, content_type, content_id, sent_at` | تتبع المحتوى المُرسَل |
+| `bot_state` | `key PK, value, updated_at` | حالة البوت (مفاتيح/قيم) |
+| `prayer_times_cache` | `id PK, date, city, fajr, sunrise, dhuhr, asr, maghrib, isha, midnight, created_at` | كاش أوقات الصلاة |
+| `dua_files` | `dua_id PK, file_id, title, updated_at` | file_id للـ PDFs المسجّلة من الأدمن |
+| `favorites` | `id PK AUTOINCREMENT, user_id FK→users, content_type, content_id, title, added_at, UNIQUE(user_id,content_type,content_id)` | مفضلات المستخدمين |
+| `error_logs` | `id PK AUTOINCREMENT, user_id, command, error_msg, logged_at` | سجل الأخطاء |
+
+#### العمليات الرئيسية (CRUD):
+
+| الدالة | الجدول | الوصف |
+|---|---|---|
+| `add_user()` | users | إضافة أو تحديث مستخدم (Upsert) |
+| `get_user()` / `get_all_users()` | users | جلب بيانات المستخدمين |
+| `update_user_location()` | users | تحديث الموقع (city, lat, lng) |
+| `toggle_subscription()` | subscriptions | تبديل حالة الاشتراك On/Off |
+| `get_user_subscriptions()` | subscriptions | جلب كل اشتراكات المستخدم |
+| `get_subscribed_users()` | subscriptions + users | جلب المشتركين بنوع محدد |
+| `mark_content_sent()` / `is_content_sent()` | sent_content | تتبع المحتوى المُرسَل |
+| `reset_daily_tracking()` | sent_content | مسح الجدول عند منتصف الليل |
+| `get_state()` / `set_state()` | bot_state | إعدادات البوت |
+| `cache_prayer_times()` / `get_cached_prayer_times()` | prayer_times_cache | كاش أوقات الصلاة |
+| `get_dua_file_id()` / `set_dua_file_id()` | dua_files | تسجيل PDF IDs من الأدمن |
+| `add_favorite()` / `remove_favorite()` / `get_favorites()` / `is_favorite()` | favorites | إدارة المفضلات |
+| `get_user_count()` / `get_new_users_count()` / `get_active_users_count()` | users | إحصائيات |
+| `get_subscription_counts()` | subscriptions | إحصائيات الاشتراكات |
+| `get_db_size()` | — | حجم قاعدة البيانات بالـ KB |
+| `log_error()` / `get_error_logs()` | error_logs | تسجيل وعرض الأخطاء |
+
+#### آلية العمل:
+- **تنشأ تلقائياً** عند أول تشغيل (`init_database()`).
+- **Foreign Keys** مفعّلة مع `ON DELETE CASCADE`.
+- **Upserts** باستخدام `ON CONFLICT(...)` — لا حاجة للـ `UPDATE` اليدوي.
+- **Connection pooling** بسيط: كل دالة تفتح/تغلق connection منفصل.
 
 **ما ينقص:** لا شيء — المكتبة مكتملة.
 
@@ -256,53 +283,281 @@
 
 ---
 
-## 📂 ملفات البيانات (JSON)
+## 📂 ملفات البيانات (JSON) — الهيكلية الكاملة
 
 ### 📁 `data/normalized/daily_content/`
 
-| الملف | الأسطر | العناصر | الحالة | الوصف |
-|---|---|---|---|---|
-| `hadith.json` | 38,469 | **2,564** ✅ | مكتمل | أحاديث من أهل البيت |
-| `wisdom.json` | 300,201 | **21,442** ✅ | مكتمل | حِكَم ومواعظ |
-| `daily_dua.json` | 188 | **30** ✅ | كافٍ | أدعية يومية (بعضها PDF) |
-| `munajat.json` | 7 | **0** ❌ | **فارغ** | المناجيات اليومية |
-| `wisdom_featured.json` | 7 | **0** ❌ | **فارغ** | الحِكَم المميّزة |
-| `wisdom_deep.json` | 7 | **0** ❌ | **فارغ** | حِكَم مطوّلة |
-| `wisdom_short.json` | 7 | **0** ❌ | **فارغ** | حِكَم قصيرة |
+| الملف | السطور | العناصر | الحالة |
+|---|---|---|---|
+| `hadith.json` | 38,469 | **2,564** ✅ | مكتمل |
+| `wisdom.json` | 300,201 | **21,442** ✅ | مكتمل |
+| `daily_dua.json` | 188 | **30** ✅ | كافٍ |
+
+#### `daily_dua.json` — هيكلية الأدعية اليومية (PDF)
+```json
+{
+  "metadata": {
+    "description": "الأدعية اليومية",
+    "total": 30,
+    "migrated_at": "2026-06-19T15:18:03.135Z"
+  },
+  "items": [
+    {
+      "id": "D001",
+      "title": "دعاء يستشير",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAA..."
+    }
+  ]
+}
+```
+
+#### `hadith.json` — هيكلية الأحاديث
+```json
+{
+  "metadata": {
+    "description": "أحاديث أهل البيت عليهم السلام",
+    "total": 2564,
+    "source": "الكافي، بحار الأنوار، وغيرها",
+    "migrated_at": "2026-06-17T15:18:03.069649"
+  },
+  "items": [
+    {
+      "id": "H000001",
+      "category": "hadith",
+      "text": "...",
+      "author": "النبي محمد ﷺ",
+      "source": "بحار الأنوار",
+      "chapter": null,
+      "tags": [],
+      "priority": 1,
+      "sent": false,
+      "content_length": 277,
+      "recommended_time": "any",
+      "is_featured": true,
+      "send_score": 7.08
+    }
+  ]
+}
+```
+
+#### `wisdom.json` — هيكلية الحِكَم
+```json
+{
+  "metadata": {
+    "description": "...",
+    "total": 21442,
+    "sources": "...",
+    "migrated_at": "2026-06-17T15:18:03.069649"
+  },
+  "items": [
+    {
+      "id": "W000001",
+      "category": "wisdom",
+      "text": "...",
+      "author": "الإمام علي بن أبي طالب عليه السلام",
+      "source": "غرر الحكم",
+      "tags": [],
+      "sent": false,
+      "content_length": 35,
+      "recommended_time": "any",
+      "is_featured": false,
+      "send_score": 8.39,
+      "type": "short"
+    }
+  ]
+}
+```
 
 ---
 
 ### 📁 `data/normalized/event_content/`
 
-| الملف | الأسطر | العناصر | الحالة | الوصف |
-|---|---|---|---|---|
-| `events.json` | 990 | **140** ✅ | مكتمل | المناسبات الدينية الهجرية |
-| `weekly_duas.json` | 85 | **7** ✅ | مكتمل | دعاء لكل يوم من الأسبوع |
-| `weekly_ziyarat.json` | 58 | **7** ✅ | مكتمل | زيارة لكل يوم من الأسبوع |
+| الملف | السطور | العناصر | الحالة |
+|---|---|---|---|
+| `events.json` | 990 | **140** ✅ | مكتمل |
+| `weekly_duas.json` | 85 | **7** ✅ | مكتمل |
+| `weekly_ziyarat.json` | 58 | **7** ✅ | مكتمل |
+
+#### `events.json` — هيكلية المناسبات الهجرية
+```json
+{
+  "metadata": {
+    "total": 140,
+    "source": "hijri_calendar.json",
+    "format": "DD-MM",
+    "description": "مناسبات التقويم الهجري"
+  },
+  "items": [
+    {
+      "id": "EV0001",
+      "hijri_date": "01-01",
+      "month": "محرم الحرام",
+      "day": "1",
+      "text": "..."
+    }
+  ]
+}
+```
+
+#### `weekly_duas.json` — هيكلية أدعية الأسبوع
+```json
+{
+  "metadata": {
+    "description": "...",
+    "total": 7,
+    "migrated_at": "2026-06-17T15:18:03.069649"
+  },
+  "items": [
+    {
+      "id": "WD001",
+      "weekday": "saturday",
+      "title": "دعاء يوم السبت",
+      "text": "...",
+      "source": "مفاتيح الجنان",
+      "content_length": 1012,
+      "recommended_time": "morning",
+      "is_featured": true,
+      "send_score": 5.0
+    }
+  ]
+}
+```
+
+#### `weekly_ziyarat.json` — هيكلية زيارات الأسبوع (PDF)
+```json
+{
+  "metadata": {
+    "description": "...",
+    "total": 7,
+    "migrated_at": "2026-06-17T15:18:03.069649"
+  },
+  "items": [
+    {
+      "id": "WZ001",
+      "weekday": "saturday",
+      "title": "زيارة يوم السبت",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAA..."
+    }
+  ]
+}
+```
 
 ---
 
 ### 📁 `data/normalized/library/`
 
-| الملف | الأسطر | العناصر | الحالة | الوصف |
-|---|---|---|---|---|
-| `munajat.json` | 173 | **15** ✅ | كافٍ | المناجيات (المكتبة) |
-| `ziyarat.json` | 128 | **20** ✅ | كافٍ | الزيارات (المكتبة) |
-| `duas.json` | 7 | **0** ❌ | **فارغ** | أدعية المكتبة |
-| `books.json` | 7 | **0** ❌ | **فارغ** | الكتب |
-| `pdf_files.json` | 7 | **0** ❌ | **فارغ** | ملفات PDF |
-| `pdf_library.json` | 14 | **0** ❌ | **فارغ** | مكتبة PDF |
+| الملف | السطور | العناصر | الحالة |
+|---|---|---|---|
+| `munajat.json` | 173 | **15** ✅ | كافٍ |
+| `ziyarat.json` | 128 | **20** ✅ | كافٍ |
+
+#### `munajat.json` — هيكلية المناجيات
+```json
+{
+  "metadata": {
+    "description": "مناجيات أهل البيت عليهم السلام",
+    "total": 15,
+    "migrated_at": "2026-06-17T15:18:03.955694"
+  },
+  "items": [
+    {
+      "id": "MN001",
+      "category": "munajat",
+      "title": "مناجاة التائبين",
+      "text": "...",
+      "source": "مفاتيح الجنان",
+      "content_length": 2135,
+      "recommended_time": "night",
+      "is_featured": true,
+      "send_score": 7.5
+    }
+  ]
+}
+```
+
+#### `ziyarat.json` — هيكلية الزيارات (PDF)
+```json
+{
+  "metadata": {
+    "description": "...",
+    "total": 20
+  },
+  "items": [
+    {
+      "id": "Z001",
+      "title": "زيارة ائمة البقية",
+      "is_pdf": true,
+      "file_id": "BQACAgIAAxkBAA..."
+    }
+  ]
+}
+```
 
 ---
 
 ### 📁 `data/normalized/prayer_content/`
 
-| الملف | الأسطر | العناصر | الحالة | الوصف |
-|---|---|---|---|---|
-| `fajr.json` | 527 | **37** ✅ | مكتمل | تعقيبات صلاة الفجر |
-| `dhuhr.json` | 457 | **32** ✅ | مكتمل | تعقيبات صلاة الظهر |
-| `maghrib.json` | 429 | **30** ✅ | مكتمل | تعقيبات صلاة المغرب |
-| `isha.json` | 345 | **24** ✅ | مكتمل | تعقيبات صلاة العشاء |
+| الملف | السطور | العناصر | الحالة |
+|---|---|---|---|
+| `fajr.json` | 527 | **37** ✅ | مكتمل |
+| `dhuhr.json` | 457 | **32** ✅ | مكتمل |
+| `maghrib.json` | 429 | **30** ✅ | مكتمل |
+| `isha.json` | 345 | **24** ✅ | مكتمل |
+
+#### تعقيبات الصلاة — هيكلية مشتركة لكل الملفات
+```json
+{
+  "metadata": {
+    "description": "التعقيبات والأذكار والأدعية بعد صلاة [الفجر/الظهر/المغرب/العشاء]",
+    "prayer": "fajr/dhuhr/maghrib/isha",
+    "total": 37/32/30/24,
+    "migrated_at": "2026-06-17T15:18:03.943427"
+  },
+  "items": [
+    {
+      "id": "F001/D001/M001/I001",
+      "category": "taqibat",
+      "prayer": "fajr/dhuhr/maghrib/isha",
+      "title": "تعقيب الفجر/الظهر/المغرب/العشاء",
+      "text": "...",
+      "source": "مفاتيح الجنان",
+      "delay_minutes": 3,
+      "priority": 1,
+      "content_length": 158,
+      "recommended_time": "after_fajr/after_dhuhr/after_maghrib/after_isha",
+      "is_featured": true,
+      "send_score": 9.5
+    }
+  ]
+}
+```
+
+---
+
+## 🗑️ ملفات فارغة تم حذفها
+
+8 ملفات كانت مسجّلة سابقاً في التوثيق بأنها فارغة (0 عنصر) ولم تعد موجودة على القرص بعد عملية التنظيف:
+
+| الملف السابق | الموقع | السبب |
+|---|---|---|
+| `daily_content/munajat.json` | `data/normalized/` | المناجيات تُدار الآن من `library/munajat.json` |
+| `daily_content/wisdom_featured.json` | `data/normalized/` | تُدار كـ `is_featured: true` ضمن `wisdom.json` |
+| `daily_content/wisdom_short.json` | `data/normalized/` | تُدار كـ `type: "short"` ضمن `wisdom.json` |
+| `daily_content/wisdom_deep.json` | `data/normalized/` | تُدار كـ `type: "deep"` ضمن `wisdom.json` |
+| `library/duas.json` | `data/normalized/library/` | الأدعية تُدار من `daily_content/daily_dua.json` |
+| `library/books.json` | `data/normalized/library/` | لم يُستخدَم في الكود |
+| `library/pdf_files.json` | `data/normalized/library/` | لم يُستخدَم في الكود |
+| `library/pdf_library.json` | `data/normalized/library/` | لم يُستخدَم في الكود |
+
+---
+
+## 🗄️ ملف قاعدة البيانات
+
+| الملف | الموقع | الوصف | الحجم |
+|---|---|---|---|
+| `bot.db` | `storage/bot.db` | SQLite — يُنشَأ تلقائياً عند أول تشغيل | 57 KB |
 
 ---
 
@@ -318,14 +573,6 @@
 
 ---
 
-## 🗄️ ملف قاعدة البيانات
-
-| الملف | الموقع | الوصف |
-|---|---|---|
-| `bot.db` | `storage/bot.db` | SQLite — يُنشَأ تلقائياً عند أول تشغيل |
-
----
-
 ## 🚦 ملخص حالة الملفات
 
 ### ✅ مكتمل ولا يحتاج تعديل
@@ -333,27 +580,13 @@
 - `services/prayer_service.py` · `services/aladhan_service.py`
 - `services/content_service.py` · `services/event_service.py`
 - `services/subscription_service.py` · `services/location_data.py`
-- بيانات: `hadith.json` · `wisdom.json` · `daily_dua.json`
-- بيانات: `events.json` · `weekly_duas.json` · `weekly_ziyarat.json`
-- بيانات: `fajr/dhuhr/maghrib/isha.json` (تعقيبات)
+- بيانات JSON كلها مكتملة (لا يوجد فارغ)
 
 ### ✅ مُحدَّث لـ aiogram v3
 - `app.py` · `middleware/rate_limit.py` · `services/navigation_service.py`
 
 ### ✅ مجلد handlers/ — تم التحديث (aiogram v3)
-- `handlers/` — مجلد مقسَّم بدلاً من الملف الواحد (1918 سطر) → 6 ملفات + `__init__.py`
-
-### ❌ بيانات فارغة تحتاج محتوى
-| الملف | ماذا ينقصه |
-|---|---|
-| `daily_content/munajat.json` | المناجيات اليومية |
-| `daily_content/wisdom_featured.json` | أفضل الحِكَم المختارة |
-| `daily_content/wisdom_short.json` | حِكَم قصيرة |
-| `daily_content/wisdom_deep.json` | حِكَم مطوّلة |
-| `library/duas.json` | نصوص أدعية المكتبة |
-| `library/books.json` | الكتب |
-| `library/pdf_files.json` | روابط ملفات PDF |
-| `library/pdf_library.json` | مكتبة PDF |
+- `handlers/` — مجلد مقسَّم بدلاً من الملف الواحد (1918 سطر) → 6 ملفات + `__init__.py`
 
 ---
 
