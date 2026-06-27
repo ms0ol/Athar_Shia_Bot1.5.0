@@ -13,7 +13,7 @@
         ↓
    RateLimitMiddleware  ← فلترة الطلبات المتكررة
         ↓
-   handlers.py  ← معالجة الأوامر والأزرار
+   handlers/    ← مجلد معالجات مُقسَّم (aiogram v3)
         ↓
 ┌─────────────────────────────────────┐
 │           Services Layer            │
@@ -41,7 +41,7 @@
 | ما يفعله | التفاصيل |
 |---|---|
 | يُنشئ Bot و Dispatcher | مع DefaultBotProperties (parse_mode HTML) |
-| يسجّل الـ Router | من handlers.py |
+| يسجّل الـ Router | من handlers/__init__.py (main_router) |
 | يشغّل Middleware | RateLimitMiddleware على message و callback |
 | on_startup | يهيّئ DB، يشغّل الـ Scheduler، يضبط أوامر البوت |
 | on_shutdown | يوقف الـ Scheduler، يغلق الجلسة |
@@ -51,34 +51,26 @@
 
 ---
 
-### `handlers.py` — 1918 سطر ⚠️ (لا يزال على aiogram v2)
+### `handlers/` — مجلد المعالجات ✅ (aiogram v3)
 **الدور:** معالجة جميع أوامر التيليغرام والأزرار (Callbacks)
 
-| القسم | الأوامر / Callbacks |
-|---|---|
-| أوامر عامة | `/start`, `/menu`, `/prayer`, `/event`, `/daily`, `/subs`, `/about`, `/city`, `/id` |
-| قائمة رئيسية | `menu:main`, `menu:ibadat`, `menu:library`, `menu:prayer`, `menu:events`, `menu:daily`, `menu:settings`, `menu:favorites` |
-| العبادات | `ibadat:day_works`, `ibadat:night_works`, `ibadat:dua_today`, `ibadat:ziyarat_today`, `ibadat:taqibat`, `ibadat:what_to_read` |
-| التعقيبات | `taqibat:fajr/dhuhr/maghrib/isha`, `taqibat_page:*` |
-| المكتبة | `library:duas/ziyarat/munajat/hadith/wisdom` |
-| محتوى عشوائي | `dua:random`, `ziyarat:random`, `munajat:random` |
-| الصلاة | `prayer:times`, `prayer:next`, `prayer:taqibat`, `prayer:reminder` |
-| المناسبات | `event:today`, `event:upcoming`, `event:works`, `event:calendar` |
-| المحتوى اليومي | `daily:hadith`, `daily:wisdom`, `daily:dua`, `daily:munajat`, `daily:random` |
-| الإعدادات | `settings:subs`, `settings:city`, `settings:timezone`, `settings:about` |
-| الموقع | `location:request_gps`, `location:manual`, `location:gov:*`, `location:district:*` |
-| الاشتراكات | `sub_toggle:*` |
-| التصفّح (pagination) | `dua_lib:*`, `ziyarat_lib:*`, `munajat_lib:*`, `hadith_lib:*`, `wisdom_lib:*` |
-| المفضلة | `menu:favorites`, `fav:list:*`, `fav:view:*`, `fav:add:*`, `fav:rm:*` |
-| أدمن | `/admin`, `/stats`, `/broadcast`, `/content_status`, `/errors` |
-| GPS | معالجة رسائل الموقع الجغرافي + إلغاء GPS |
+| الملف | القسم | الأوامر / Callbacks | السطور |
+|---|---|---|---|
+| `handlers/common.py` | أوامر عامة وقوائم | `/start`, `/menu`, `/about`, `/id`, `menu:*` | 310 |
+| `handlers/ibadat.py` | العبادات والتعقيبات والمكتبة | `ibadat:*`, `taqibat:*`, `library:*`, `dua:random`... | 415 |
+| `handlers/prayer.py` | الصلاة والموقع | `/prayer`, `/city`, `prayer:*`, `location:*`, GPS | 298 |
+| `handlers/events.py` | المناسبات والتقويم الهجري | `/event`, `event:*` | 68 |
+| `handlers/daily.py` | المحتوى اليومي والمفضلة والاشتراكات | `/daily`, `/subs`, `daily:*`, `sub_toggle:*`, `fav:*`, `*_lib:*` | 365 |
+| `handlers/admin.py` | أوامر الأدمن والبث | `/admin`, `/stats`, `/broadcast`, `/errors` | 183 |
+| `handlers/__init__.py` | تجميع وربط الـ Routers | يستير ويدمج كلـ Routers | 25 |
 
-**ما ينقص / ما يجب تغييره:**
-- ⚠️ لا يزال يستخدم aiogram **v2** API (`dp.register_*`, `message.get_args()`, `WrongFileIdentifier`, `BadRequest` من `aiogram.utils.exceptions`)
-- يجب التحويل إلى **Router** بدلاً من `Dispatcher` مباشرةً
-- `message.get_args()` → `CommandObject` في v3
-- `aiogram.utils.exceptions` → `aiogram.exceptions`
-- `register_message_handler` / `register_callback_query_handler` → decorators على Router
+**التحديثات المطبَّقة (v2 → v3):**
+- `Dispatcher` → `Router` مع Decorators (`@router.message(Command(...))`)
+- `message.get_args()` → `CommandObject` كـ parameter
+- `aiogram.utils.exceptions` → `aiogram.exceptions` (`TelegramBadRequest`)
+- `register_message_handler` / `register_callback_query_handler` → Decorators على Router
+- `ReplyKeyboardMarkup().add()` → `ReplyKeyboardMarkup(keyboard=[[...]])`
+- `InlineKeyboardMarkup().add()/.row()` → `InlineKeyboardMarkup(inline_keyboard=[[...]])`
 
 ---
 
@@ -348,8 +340,8 @@
 ### ✅ مُحدَّث لـ aiogram v3
 - `app.py` · `middleware/rate_limit.py` · `services/navigation_service.py`
 
-### ⚠️ يحتاج تحديث (aiogram v2 → v3)
-- `handlers.py` — **1918 سطر** — الملف الأكبر والأهم
+### ✅ مجلد handlers/ — تم التحديث (aiogram v3)
+- `handlers/` — مجلد مقسَّم بدلاً من الملف الواحد (1918 سطر) → 6 ملفات + `__init__.py`
 
 ### ❌ بيانات فارغة تحتاج محتوى
 | الملف | ماذا ينقصه |
@@ -365,17 +357,19 @@
 
 ---
 
-## 🔑 المشكلة الرئيسية الحالية
+## 🔑 المشكلة الرئيسية — تم حلها ✅
 
-**البوت لا يعمل** لأن `handlers.py` يستخدم aiogram v2 API بينما المثبَّت هو aiogram v3.
+تم تحويل `handlers.py` الواحد (1918 سطر، aiogram v2) إلى مجلد `handlers/` مقسّم بأسلوب aiogram v3.
 
-**التغييرات المطلوبة في `handlers.py`:**
+**الملف القديم:** `handlers_v2_backup.py` — نسخة احتياطية فقط من `handlers.py` الأصلي (v2)
+
+**التغييرات المطبَّقة:**
 
 ```python
-# v2 → v3
+# v2 → v3 ✅ تم التطبيق
 from aiogram import Dispatcher          →  from aiogram import Router
-from aiogram.utils.exceptions import … →  from aiogram.exceptions import …
-message.get_args()                      →  command: CommandObject (كـ parameter)
+from aiogram.utils.exceptions import … →  from aiogram.exceptions import TelegramBadRequest
+message.get_args()                      →  command: CommandObject (parameter)
 dp.register_message_handler(fn, …)     →  @router.message(Command("start"))
 dp.register_callback_query_handler(fn) →  @router.callback_query(F.data == "…")
 ReplyKeyboardMarkup().add(…)           →  ReplyKeyboardMarkup(keyboard=[[…]])
