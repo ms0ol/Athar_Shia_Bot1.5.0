@@ -1,0 +1,86 @@
+الهيكلية المقترحة لمجلد الـ Handlers
+بدلاً من وجود ملف handlers.py واحد، سنقوم بإنشاء مجلد كامل باسم handlers/ يحتوي على ملفات مقسمة حسب الوظيفة أو الأقسام الموجودة في لوحة التحكم الخاصة بالبوت:
+```text
+athar_bot/
+│
+├── handlers/               ← المجلد الجديد
+│   ├── __init__.py         ← تجميع وربط كل الـ Routers
+│   ├── common.py           ← الأوامر العامة (/start, /menu, /about, /id)
+│   ├── ibadat.py           ← العبادات اليومية والتعقيبات والمكتبة
+│   ├── prayer.py           ← أوقات الصلاة والـ GPS والموقع
+│   ├── events.py           ← المناسبات والتقويم الهجري
+│   ├── daily.py            ← المحتوى اليومي والاشتراكات والمفضلة
+│   └── admin.py            ← أوامر الأدمن والبث (/admin, /broadcast)
+│
+├── app.py                  ← نقطة الدخول (نستدعي الراوتر الرئيسي فقط)
+
+```
+## 🛠️ خطة التنفيذ خطوة بخطوة
+### 1. طريقة كتابة الملفات الفرعية (مثال: handlers/common.py)
+داخل كل ملف فرعي، لن نستخدم dp (الـ Dispatcher)، بل سننشئ Router خاص بهذا الملف ونربط به الدوال باستخدام الـ Decorators الخاصة بـ **aiogram v3**:
+```python
+# handlers/common.py
+from aiogram import Router, F
+from aiogram.filters import Command
+from aiogram.types import Message, CallbackQuery
+from services.navigation_service import main_menu # كمثال
+
+# إنشاء راوتر خاص بالملف
+router = Router(name="common_router")
+
+@router.message(Command("start"))
+async def cmd_start(message: Message):
+    await message.answer("أهلاً بك في بوت أثَر", reply_markup=main_menu())
+
+@router.callback_query(F.data == "menu:main")
+async def back_to_main_menu(callback: CallbackQuery):
+    await callback.message.edit_text("القائمة الرئيسية", reply_markup=main_menu())
+    await callback.answer()
+
+```
+### 2. تجميع الـ Routers في ملف handlers/__init__.py
+هذا هو السر الذي يمنع تشتت الكود. نقوم باستيراد الـ Routers من الملفات الفرعية وربطها براوتر رئيسي واحد يمثل المجلد:
+```python
+# handlers/__init__.py
+from aiogram import Router
+
+# استيراد الرواترز الفرعية
+from .common import router as common_router
+from .ibadat import router as ibadat_router
+from .prayer import router as prayer_router
+from .events import router as events_router
+from .daily import router as daily_router
+from .admin import router as admin_router
+
+# إنشاء الراوتر الرئيسي للمجلد
+main_router = Router(name="main_handlers_router")
+
+# دمج الرواترز الفرعية (الترتيب مهم أحياناً إذا كان هناك تعارض في الفلاتر)
+main_router.include_routers(
+    common_router,
+    ibadat_router,
+    prayer_router,
+    events_router,
+    daily_router,
+    admin_router
+)
+
+```
+### 3. ربط المجلد بملف تشغيل البوت app.py
+الآن، في ملفك الرئيسي app.py لن تحتاج لتسجيل عشرات الـ Handlers أو الـ Routers. ستقوم فقط باستيراد main_router وربطه بالـ Dispatcher:
+```python
+# app.py
+from aiogram import Bot, Dispatcher
+from handlers import main_router # استيراد الراوتر المجمع تلقائياً من المجلد
+
+async def main():
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    dp = Dispatcher()
+    
+    # ربط الراوتر الرئيسي بالـ Dispatcher
+    dp.include_router(main_router)
+    
+    # تشغيل الـ Middlewares والـ Scheduler كما هي...
+    await dp.start_polling(bot)
+
+```
