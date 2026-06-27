@@ -15,7 +15,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
 import database as db
-from handlers import router
+from handlers import main_router
 from scheduler import BotScheduler
 from middleware import RateLimitMiddleware
 
@@ -129,7 +129,7 @@ async def main():
     dp.message.middleware(RateLimitMiddleware(admin_ids=config.ADMIN_IDS))
     dp.callback_query.middleware(RateLimitMiddleware(admin_ids=config.ADMIN_IDS))
 
-    dp.include_router(router)
+    dp.include_router(main_router)
 
     logger.info("Starting polling...")
     try:
